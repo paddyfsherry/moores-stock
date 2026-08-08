@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
     --claret:#5C1A2E;        /* deep claret — masthead & primary actions */
@@ -118,6 +119,7 @@
   <button data-view="history">Movement history</button>
   <button data-view="products">Wine list</button>
   <button data-view="packs">Gift packs</button>
+  <button data-view="recon">Reconcile</button>
 </nav>
 
 <main id="appMain">
@@ -260,6 +262,54 @@
     </div>
   </div>
 
+  <!-- ========== RECONCILE ========== -->
+  <div id="viewRecon" class="view" style="display:none">
+    <div class="panel">
+      <h2>Weekly DVL reconciliation</h2>
+      <p class="hint">Upload the DVL <strong>Storage Report</strong> PDF exactly as it arrives. Each line is matched by product code against the ledger's bonded-warehouse balance (Under Bond + Duty Paid combined).</p>
+      <div class="grid2">
+        <div><label for="rcFile">Storage report PDF</label><input id="rcFile" type="file" accept="application/pdf"></div>
+        <div><label for="rcDate">Report date</label><input id="rcDate" type="date"></div>
+      </div>
+      <div class="msg" id="rcMsg"></div>
+    </div>
+    <div id="rcResults" style="display:none">
+      <div class="cards">
+        <div class="card dp"><div class="k">Lines agreeing</div><div class="v" id="rcAgree">—</div></div>
+        <div class="card bond"><div class="k">Differences</div><div class="v" id="rcDiff">—</div></div>
+        <div class="card"><div class="k">Not in wine list</div><div class="v" id="rcUnk">—</div></div>
+      </div>
+      <div class="panel" id="rcDiffPanel">
+        <h2>Differences — DVL vs ledger (bottles)</h2>
+        <p class="hint">Post an adjustment to accept DVL's figure, or investigate first. Adjustments are dated with the report date and noted as weekly reconciliation.</p>
+        <div class="wrap"><table><thead><tr><th>Code</th><th>Wine</th><th class="num">DVL</th><th class="num">Ledger</th><th class="num">Diff</th><th></th></tr></thead>
+        <tbody id="rcDiffBody"></tbody></table></div>
+      </div>
+      <div class="panel">
+        <h2>Codes not in the wine list</h2>
+        <p class="hint">Usually en primeur held under DVL's own codes, or DVL code variants (e.g. a letter suffix). No action needed unless something looks wrong.</p>
+        <div class="wrap"><table><thead><tr><th>Code</th><th>Description</th><th class="num">Cases</th></tr></thead>
+        <tbody id="rcUnkBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== INVOICE MODAL ========== -->
+  <div id="invWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:60" onclick="if(event.target===this)closeInv()">
+    <div style="background:var(--paper);max-width:760px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" id="invTitle" style="font-size:1.15rem"></h2>
+        <button onclick="closeInv()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" id="invMeta" style="margin:.2rem 0 .8rem"></p>
+      <div class="wrap"><table>
+        <thead><tr><th>Line</th><th class="num">Qty</th><th>Unit</th><th class="num">Price €</th><th class="num">Total €</th><th>Rotation</th></tr></thead>
+        <tbody id="invBody"></tbody>
+      </table></div>
+      <p id="invTotals" style="text-align:right;margin-top:.7rem;font-family:'Libre Caslon Text',serif"></p>
+    </div>
+  </div>
+
   <!-- ========== PRODUCTS ========== -->
   <div id="viewProducts" class="view" style="display:none">
     <div class="tools">
@@ -316,7 +366,7 @@ function showLogin(){
   $("viewLogin").style.display="block";
   $("mainNav").style.display="none";
   $("whoBox").style.display="none";
-  ["viewStock","viewMove","viewHistory","viewProducts","viewPacks"].forEach(v=>$(v).style.display="none");
+  ["viewStock","viewMove","viewHistory","viewProducts","viewPacks","viewRecon"].forEach(v=>$(v).style.display="none");
 }
 async function enter(session){
   $("viewLogin").style.display="none";
@@ -366,6 +416,7 @@ function switchView(v){
   $("viewHistory").style.display = v==="history"?"block":"none";
   $("viewProducts").style.display= v==="products"?"block":"none";
   $("viewPacks").style.display   = v==="packs"?"block":"none";
+  $("viewRecon").style.display   = v==="recon"?"block":"none";
   if(v==="packs") renderPacks();
   if(v==="stock") loadStock();
   if(v==="history") loadHistory();
@@ -532,7 +583,7 @@ function renderHistory(){
     <td class="dim">${r.movement_date}</td><td>${typeNames[r.movement_type]||r.movement_type}</td>
     <td>${esc(r.products?.name||"—")}</td><td class="num">${r.qty_bottles}</td>
     <td class="dim">${esc(r.from_l?.name||"—")}</td><td class="dim">${esc(r.to_l?.name||"—")}</td>
-    <td class="dim">${esc(r.rotation_number||"")}</td><td class="dim">${esc(r.reference||"")}</td></tr>`).join("");
+    <td class="dim">${esc(r.rotation_number||"")}</td><td class="dim">${refCell(r.reference)}</td></tr>`).join("");
   $("histCount").textContent = rows.length ? rows.length+" of latest 300" : "No movements yet";
 }
 $("histSearch").oninput = renderHistory;
@@ -575,7 +626,7 @@ async function openDrill(pid){
     return `<tr><td class="dim">${m.movement_date}</td><td>${typeNames[m.movement_type]||m.movement_type}</td>
       <td class="dim">${out?esc(lname(m.from_location_id)):"—"}</td><td class="dim">${inn?esc(lname(m.to_location_id)):"—"}</td>
       <td class="num${delta<0?" neg":""}">${qtyTxt}</td><td class="num"><strong>${bal}</strong></td>
-      <td class="dim">${esc(m.rotation_number||"")}</td><td class="dim">${esc(m.reference||"")}</td></tr>`;
+      <td class="dim">${esc(m.rotation_number||"")}</td><td class="dim">${refCell(m.reference)}</td></tr>`;
   }).join("");
 }
 function closeDrill(){ $("drillWrap").style.display="none"; }
@@ -640,6 +691,124 @@ function renderPacks(){
     const parts=packOf(pid).map(c=>{const cp=products.find(x=>x.id===c.component_id);return c.qty_bottles+" × "+(cp?cp.name:c.component_id);}).join("<br>");
     return `<tr><td>${esc(p.name)}</td><td class="dim">${parts}</td><td class="num">${eur(p.case_price)}</td></tr>`;
   }).join("") || "<tr><td colspan=3 class='dim'>No packs yet — create the first one above.</td></tr>";
+}
+
+/* ==================== INVOICE VIEWER ==================== */
+function refCell(ref){
+  const m = /^INV (\d+)/.exec(ref||"");
+  if(!m) return esc(ref||"");
+  return `<a href="#" onclick="event.preventDefault();event.stopPropagation();openInvoice(${m[1]})" style="color:var(--claret)">${esc(ref)}</a>`;
+}
+async function openInvoice(id){
+  $("invTitle").textContent = "Invoice "+id;
+  $("invMeta").textContent = "Loading…";
+  $("invBody").innerHTML=""; $("invTotals").textContent="";
+  $("invWrap").style.display="block";
+  const {data:inv, error} = await db.from("invoices")
+    .select("*, customers(name,address1,eircode)").eq("id",id).maybeSingle();
+  if(error || !inv){ $("invMeta").textContent = "This invoice isn't in the system (history before July 2025 hasn't been loaded)."; return; }
+  const {data:lines} = await db.from("invoice_lines").select("*").eq("invoice_id",id).order("id");
+  $("invMeta").textContent = inv.invoice_date+" — "+(inv.customers?.name||"")+
+    (inv.cust_order_no?" — order "+inv.cust_order_no:"")+
+    (inv.delivery_comment?" — "+inv.delivery_comment:"");
+  $("invBody").innerHTML = (lines||[]).map(l=>`<tr>
+    <td>${esc(l.description)}</td><td class="num">${l.qty}</td><td class="dim">${esc(l.unit)}</td>
+    <td class="num">${eur(l.case_price)}</td><td class="num">${eur(l.line_total)}</td>
+    <td class="dim">${esc(l.rotation_number||"")}</td></tr>`).join("");
+  $("invTotals").innerHTML = "Net €"+eur(inv.net_total)+" &nbsp;·&nbsp; VAT €"+eur(inv.vat)+" &nbsp;·&nbsp; <strong>Total €"+eur(inv.gross_total)+"</strong>"+(inv.discount>0?" &nbsp;(discount €"+eur(inv.discount)+")":"");
+}
+function closeInv(){ $("invWrap").style.display="none"; }
+
+/* ==================== WEEKLY RECONCILIATION ==================== */
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+async function pdfToLines(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  const lines=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const byY = {};
+    tc.items.forEach(it=>{
+      const y = Math.round(it.transform[5]);
+      (byY[y] = byY[y]||[]).push({x:it.transform[4], s:it.str});
+    });
+    Object.keys(byY).map(Number).sort((a,b)=>b-a).forEach(y=>{
+      const line = byY[y].sort((a,b)=>a.x-b.x).map(i=>i.s).join(" ").replace(/\s+/g," ").trim();
+      if(line) lines.push(line);
+    });
+  }
+  return lines;
+}
+function parseStorage(lines){
+  const rows=[], unknownish=[];
+  const re = /^(\S+)\s+(.*?)\s+(\d+)\s*x\s*(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)$/;
+  for(const ln of lines){
+    const m = re.exec(ln);
+    if(!m) continue;
+    const num = s=>parseFloat(s.replace(/,/g,""));
+    rows.push({raw:m[1], desc:m[2].replace(/\s+(19|20)\d\d$|\s+NV$|\s+n\/a$/,""), pack:+m[3],
+               opening:num(m[5]), cin:num(m[6]), cout:num(m[7]), closing:num(m[8])});
+  }
+  return rows;
+}
+$("rcFile").onchange = async ()=>{
+  const f = $("rcFile").files[0]; if(!f) return;
+  const msg=$("rcMsg"); msg.className="msg"; msg.textContent="Reading the report…"; msg.className="msg ok";
+  if(!$("rcDate").value) $("rcDate").value = new Date().toISOString().slice(0,10);
+  let rows=[];
+  try{ rows = parseStorage(await pdfToLines(f)); }
+  catch(e){ msg.textContent="Couldn't read that PDF — is it the DVL storage report? ("+e.message+")"; msg.className="msg err"; return; }
+  if(!rows.length){ msg.textContent="No stock lines found in that PDF — is it the storage report (not the invoice)?"; msg.className="msg err"; return; }
+  // ledger balances at bond (locations 1+2)
+  const stock = await fetchAll("v_stock_on_hand","product_id,location_id,qty_bottles");
+  const led = {};
+  stock.filter(s=>s.location_id===1||s.location_id===2).forEach(s=>led[s.product_id]=(led[s.product_id]||0)+s.qty_bottles);
+  const diffs=[], unknown=[]; let agree=0; const seen=new Set();
+  for(const r of rows){
+    const code = parseInt(r.raw,10);
+    const p = products.find(x=>x.id===code);
+    const dvlB = Math.round(r.closing*r.pack);
+    if(!p || String(code)!==r.raw.replace(/[A-Za-z]+$/,"")){ }
+    if(!p){ unknown.push(r); continue; }
+    seen.add(code);
+    const ledB = led[code]||0;
+    if(dvlB===ledB) agree++;
+    else diffs.push({code, name:p.name, alias:/[A-Za-z]$/.test(r.raw)?r.raw:"", dvl:dvlB, led:ledB});
+  }
+  // wines the ledger has at the bond but DVL didn't list at all
+  Object.keys(led).forEach(k=>{
+    const code=+k;
+    if(!seen.has(code) && led[code]!==0){
+      const p=products.find(x=>x.id===code);
+      diffs.push({code, name:(p?p.name:code)+" (not on DVL report)", alias:"", dvl:0, led:led[code]});
+    }
+  });
+  diffs.sort((a,b)=>(a.dvl-a.led)-(b.dvl-b.led));
+  $("rcAgree").textContent=agree; $("rcDiff").textContent=diffs.length; $("rcUnk").textContent=unknown.length;
+  $("rcDiffBody").innerHTML = diffs.map((d,i)=>{
+    const df=d.dvl-d.led;
+    return `<tr><td>${d.code}${d.alias?" <span class='dim'>("+esc(d.alias)+")</span>":""}</td><td>${esc(d.name)}</td>
+      <td class="num">${d.dvl}</td><td class="num">${d.led}</td><td class="num${df<0?" neg":""}">${df>0?"+":""}${df}</td>
+      <td><button onclick="postRecAdj(${d.code},${df},this)" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.25rem .6rem;cursor:pointer">Post adjustment</button></td></tr>`;
+  }).join("") || "<tr><td colspan=6 class='dim'>None — a perfect week.</td></tr>";
+  $("rcUnkBody").innerHTML = unknown.map(u=>`<tr><td>${esc(u.raw)}</td><td class="dim">${esc(u.desc)}</td><td class="num">${u.closing}</td></tr>`).join("") || "<tr><td colspan=3 class='dim'>None</td></tr>";
+  $("rcResults").style.display="block";
+  msg.textContent = "Report read: "+rows.length+" stock lines matched against the ledger.";
+  msg.className="msg ok";
+};
+async function postRecAdj(code, diff, btn){
+  if(!diff) return;
+  const row = {
+    movement_date: $("rcDate").value, movement_type:"adjustment", product_id:code,
+    qty_bottles: Math.abs(diff),
+    from_location_id: diff<0 ? 1 : null, to_location_id: diff>0 ? 1 : null,
+    reference:"WEEKLY RECON", notes:"Weekly DVL reconciliation "+$("rcDate").value
+  };
+  btn.disabled=true;
+  const {error} = await db.from("stock_movements").insert(row);
+  if(error){ btn.disabled=false; alert("Not saved: "+error.message); return; }
+  btn.textContent="Posted ✓";
 }
 
 init();
