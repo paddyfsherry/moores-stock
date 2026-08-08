@@ -151,7 +151,7 @@
     </div>
     <div class="wrap"><table id="stockTable">
       <thead><tr>
-        <th>Wine</th><th>Case</th><th>Location</th><th>Status</th>
+        <th>Code</th><th>Wine</th><th>Case</th><th>Location</th><th>Status</th>
         <th class="num">Cases</th><th class="num">Bottles</th>
         <th class="num">Cost €</th><th class="num">Duty €</th><th class="num">Value €</th>
       </tr></thead>
@@ -350,7 +350,7 @@
     </div>
     <div class="wrap"><table>
       <thead><tr>
-        <th>Wine</th><th class="num">Btls/case</th><th class="num">Bottle ml</th>
+        <th>Code</th><th>Wine</th><th class="num">Btls/case</th><th class="num">Bottle ml</th>
         <th class="num">Case cost €</th><th class="num">Duty/case €</th><th class="num">List price €</th>
       </tr></thead>
       <tbody id="prodBody"></tbody>
@@ -464,7 +464,7 @@ async function loadStock(){
 function renderStock(){
   const q = $("stockSearch").value.trim().toLowerCase();
   const lf = $("stockLoc").value;
-  const rows = stockRows.filter(r=>(!q || r.product.toLowerCase().includes(q)) && (!lf || String(r.location_id)===lf));
+  const rows = stockRows.filter(r=>(!q || r.product.toLowerCase().includes(q) || String(r.product_id).includes(q)) && (!lf || String(r.location_id)===lf));
   let ub=0, dp=0;
   stockRows.forEach(r=>{ r.duty_status==="under_bond" ? ub+=Number(r.total_value) : dp+=Number(r.total_value); });
   $("cardUB").textContent = "€"+eur(ub);
@@ -476,7 +476,7 @@ function renderStock(){
     const tag = r.duty_status==="under_bond" ? '<span class="tag bond">Under bond</span>' : '<span class="tag dp">Duty paid</span>';
     const p = products.find(p=>p.id===r.product_id);
     const caseTxt = p ? p.bottles_in_case+"×"+p.bottle_size_ml+"ml" : "";
-    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${caseTxt}</td>
+    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td class="dim">${r.product_id}</td><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${caseTxt}</td>
       <td>${esc(r.location)}</td><td>${tag}</td>
       <td${negC}>${r.cases}</td><td${negC}>${r.qty_bottles}</td>
       <td class="num">${eur(r.cost_value)}</td><td class="num">${eur(r.duty_value)}</td><td class="num"><strong>${eur(r.total_value)}</strong></td></tr>`;
@@ -511,7 +511,7 @@ $("mvProdSearch").oninput = ()=>{
   const q=$("mvProdSearch").value.trim().toLowerCase();
   const list=$("mvProdList");
   if(q.length<2){ list.style.display="none"; return; }
-  const hits = products.filter(p=>!p.obsolete && p.name.toLowerCase().includes(q)).slice(0,12);
+  const hits = products.filter(p=>!p.obsolete && (p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,12);
   const more = products.filter(p=>p.obsolete && p.name.toLowerCase().includes(q)).slice(0, 12-hits.length);
   const all = hits.concat(more);
   list.innerHTML = all.map(p=>`<li data-id="${p.id}">${esc(p.name)} <span class="cs">(${p.bottles_in_case}×${p.bottle_size_ml}ml${p.obsolete?", obsolete":""})</span></li>`).join("") || "<li class='dim'>No wines match</li>";
@@ -623,14 +623,14 @@ $("histSearch").oninput = renderHistory;
 function renderProducts(){
   const q=$("prodSearch").value.trim().toLowerCase();
   const showOld=$("prodShowOld").checked;
-  const rows = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q))).slice(0,400);
+  const rows = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,400);
   $("prodBody").innerHTML = rows.map(p=>{
     const duty = dutyCats[p.duty_category_id]?.duty_per_case;
-    return `<tr${p.obsolete?' style="opacity:.55"':''}><td>${esc(p.name)}</td>
+    return `<tr${p.obsolete?' style="opacity:.55"':''}><td class="dim">${p.id}</td><td style="cursor:pointer;color:var(--claret);text-decoration:underline dotted" onclick="openDrill(${p.id})">${esc(p.name)}</td>
       <td class="num">${p.bottles_in_case}</td><td class="num">${p.bottle_size_ml}</td>
       <td class="num">${eur(p.case_cost)}</td><td class="num">${eur(duty)}</td><td class="num">${eur(p.case_price)}</td></tr>`;
   }).join("");
-  const total = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q))).length;
+  const total = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q)||String(p.id).includes(q))).length;
   $("prodCount").textContent = total>400 ? "showing 400 of "+total : total+" wines";
 }
 $("prodSearch").oninput = renderProducts;
@@ -639,7 +639,7 @@ $("prodShowOld").onchange = renderProducts;
 /* ==================== DRILL-DOWN ==================== */
 async function openDrill(pid){
   const p = products.find(x=>x.id===pid); if(!p) return;
-  $("drillTitle").textContent = p.name;
+  $("drillTitle").textContent = p.id+" — "+p.name;
   $("drillSub").textContent = "Case of "+p.bottles_in_case+" × "+p.bottle_size_ml+"ml — every movement, oldest first, with running balance in bottles.";
   $("drillBody").innerHTML = "<tr><td colspan=8 class='dim'>Loading…</td></tr>";
   $("drillWrap").style.display="block";
