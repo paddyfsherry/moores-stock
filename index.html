@@ -282,10 +282,20 @@
           </select></div>
       </div>
       <div class="grid2">
-        <div><label for="rpWine">Wine filter <span style="text-transform:none;font-weight:400">(optional — code or pick a name)</span></label>
-          <input id="rpWine" list="rpWineList" placeholder="e.g. 3099 or start typing…"><datalist id="rpWineList"></datalist></div>
-        <div><label for="rpCust">Customer filter <span style="text-transform:none;font-weight:400">(optional)</span></label>
-          <input id="rpCust" list="rpCustList" placeholder="start typing a customer…"><datalist id="rpCustList"></datalist></div>
+        <div><label for="rpWine">Wine filter <span style="text-transform:none;font-weight:400">(optional — pick one or several)</span></label>
+          <input id="rpWine" list="rpWineList" placeholder="code or name, pick, repeat…"><datalist id="rpWineList"></datalist>
+          <div id="rpWineChips" style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.35rem"></div></div>
+        <div><label for="rpCust">Customer filter <span style="text-transform:none;font-weight:400">(optional — pick one or several)</span></label>
+          <input id="rpCust" list="rpCustList" placeholder="type a customer, pick, repeat…"><datalist id="rpCustList"></datalist>
+          <div id="rpCustChips" style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.35rem"></div></div>
+      </div>
+      <div class="grid2">
+        <div><label for="rpRegion">Region filter <span style="text-transform:none;font-weight:400">(optional)</span></label>
+          <input id="rpRegion" list="rpRegionList" placeholder="e.g. Burgundy…"><datalist id="rpRegionList"></datalist>
+          <div id="rpRegionChips" style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.35rem"></div></div>
+        <div><label for="rpType">Customer type filter <span style="text-transform:none;font-weight:400">(optional)</span></label>
+          <input id="rpType" list="rpTypeList" placeholder="e.g. Hotel…"><datalist id="rpTypeList"></datalist>
+          <div id="rpTypeChips" style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.35rem"></div></div>
       </div>
       <button class="btn" id="rpRun">Run report</button>
       <button class="btn" id="rpCsv" style="background:#7A6E63;display:none">Download as spreadsheet</button>
@@ -899,32 +909,70 @@ async function postRecAdj(code, diff, btn){
 
 /* ==================== REPORTS ==================== */
 let rpLast=null;
+function chipPicker(inpId, chipsId, resolve){
+  const st={sel:[]};
+  st.render=()=>{
+    $(chipsId).innerHTML = st.sel.map((c,i)=>
+      `<span style="background:var(--dp-bg);color:var(--dp);border-radius:99px;padding:.15rem .3rem .15rem .7rem;font-size:.8rem;display:inline-flex;align-items:center;gap:.3rem">${esc(c.label)}
+        <button data-i="${i}" style="background:none;border:none;cursor:pointer;color:var(--dp);font-weight:700">✕</button></span>`).join("");
+    $(chipsId).querySelectorAll("button").forEach(b=>b.onclick=()=>{st.sel.splice(+b.dataset.i,1);st.render();});
+  };
+  st.sweep=()=>{
+    const v=$(inpId).value.trim(); if(!v) return true;
+    const c=resolve(v); if(!c) return false;
+    if(!st.sel.find(x=>x.key===c.key)){ st.sel.push(c); st.render(); }
+    $(inpId).value=""; return true;
+  };
+  $(inpId).addEventListener("change", ()=>st.sweep());
+  return st;
+}
+let pkWine=null, pkCust=null, pkRegion=null, pkType=null;
+
 async function rpDefaults(){
   const today=new Date().toISOString().slice(0,10);
   $("rpFrom").value="1997-02-01"; $("rpTo").value=today;
   $("rpWineList").innerHTML = products.map(p=>`<option value="${p.id} — ${esc(p.name)}">`).join("");
   window._rpCust = await fetchAll("customers","id,name,customer_type","name");
   $("rpCustList").innerHTML = window._rpCust.map(c=>`<option value="${esc(c.name)}">`).join("");
+  const tags=[...new Set(products.map(p=>p.tags).filter(t=>t))].sort();
+  $("rpRegionList").innerHTML = tags.map(t=>`<option value="${esc(t)}">`).join("");
+  const types=[...new Set(window._rpCust.map(c=>c.customer_type).filter(t=>t))].sort();
+  $("rpTypeList").innerHTML = types.map(t=>`<option value="${esc(t)}">`).join("");
+  pkWine = chipPicker("rpWine","rpWineChips", v=>{
+    const m=/^(\d+)/.exec(v); let p=null;
+    if(m) p=products.find(x=>x.id===+m[1]);
+    if(!p) p=products.find(x=>x.name.toLowerCase()===v.toLowerCase());
+    return p?{key:"p"+p.id, id:p.id, label:p.id+" "+p.name}:null;
+  });
+  pkCust = chipPicker("rpCust","rpCustChips", v=>{
+    const c=window._rpCust.find(c=>c.name.toLowerCase()===v.toLowerCase());
+    return c?{key:"c"+c.id, id:c.id, label:c.name}:null;
+  });
+  pkRegion = chipPicker("rpRegion","rpRegionChips", v=>{
+    const t=tags.find(t=>t.toLowerCase()===v.toLowerCase());
+    return t?{key:"g"+t, tag:t, label:t}:null;
+  });
+  pkType = chipPicker("rpType","rpTypeChips", v=>{
+    const t=types.find(t=>t.toLowerCase()===v.toLowerCase());
+    return t?{key:"y"+t, tag:t, label:t}:null;
+  });
 }
 $("rpRun").onclick = async ()=>{
   const msg=$("rpMsg"); msg.textContent="Crunching…"; msg.className="msg ok";
   const from=$("rpFrom").value, to=$("rpTo").value, grp=$("rpGroup").value;
-  // resolve optional filters
-  let fWine=null, fCust=null, fNote=[];
-  const wtxt=$("rpWine").value.trim();
-  if(wtxt){
-    const m=/^(\d+)/.exec(wtxt);
-    if(m && products.find(p=>p.id===+m[1])){ fWine=+m[1]; }
-    else { const p=products.find(p=>p.name.toLowerCase()===wtxt.toLowerCase()); if(p) fWine=p.id; }
-    if(!fWine){ msg.textContent="Wine filter not recognised — pick from the list or use the code."; msg.className="msg err"; return; }
-    fNote.push("wine "+fWine);
+  // resolve optional filters (sweep half-typed values into chips first)
+  let fNote=[];
+  for(const [pk,nm] of [[pkWine,"Wine"],[pkCust,"Customer"],[pkRegion,"Region"],[pkType,"Customer type"]]){
+    if(pk && !pk.sweep()){ msg.textContent=nm+" filter not recognised — pick from the list."; msg.className="msg err"; return; }
   }
-  const ctxt=$("rpCust").value.trim();
-  if(ctxt){
-    const c=(window._rpCust||[]).find(c=>c.name.toLowerCase()===ctxt.toLowerCase());
-    if(!c){ msg.textContent="Customer filter not recognised — pick from the list."; msg.className="msg err"; return; }
-    fCust=c.id; fNote.push(ctxt);
-  }
+  const wineIds = pkWine?pkWine.sel.map(c=>c.id):[];
+  const custIds = pkCust?pkCust.sel.map(c=>c.id):[];
+  const regions = pkRegion?pkRegion.sel.map(c=>c.tag):[];
+  const ctypes  = pkType?pkType.sel.map(c=>c.tag):[];
+  if(wineIds.length) fNote.push(wineIds.length+" wine"+(wineIds.length>1?"s":""));
+  if(custIds.length) fNote.push(custIds.length===1?pkCust.sel[0].label:custIds.length+" customers");
+  if(regions.length) fNote.push(regions.join("/"));
+  if(ctypes.length) fNote.push(ctypes.join("/"));
   const {data:sups} = await db.from("suppliers").select("id,name");
   const supn={}; (sups||[]).forEach(s=>supn[s.id]=s.name);
   let lines=[], off=0;
@@ -932,14 +980,19 @@ $("rpRun").onclick = async ()=>{
     let q = db.from("v_report_lines")
       .select("invoice_id,invoice_date,customer_id,customer,product_id,supplier_id,wine,qty,unit,line_total,bottles,est_cost")
       .gte("invoice_date",from).lte("invoice_date",to);
-    if(fWine) q=q.eq("product_id",fWine);
-    if(fCust) q=q.eq("customer_id",fCust);
+    if(wineIds.length) q=q.in("product_id",wineIds);
+    if(custIds.length) q=q.in("customer_id",custIds);
     const {data, error} = await q.range(off,off+999);
     if(error){ msg.textContent="Report failed — has patch_reporting.sql been run in Supabase? ("+error.message+")"; msg.className="msg err"; return; }
     lines=lines.concat(data);
     if(data.length<1000) break;
     off+=1000;
     msg.textContent="Crunching… "+lines.length.toLocaleString()+" lines so far";
+  }
+  if(regions.length || ctypes.length){
+    const pt={}; products.forEach(p=>pt[p.id]=p.tags||"");
+    const ct={}; (window._rpCust||[]).forEach(c=>ct[c.id]=c.customer_type||"");
+    lines = lines.filter(l=>(!regions.length||regions.includes(pt[l.product_id]||"")) && (!ctypes.length||ctypes.includes(ct[l.customer_id]||"")));
   }
   const agg={};
   for(const l of lines){
