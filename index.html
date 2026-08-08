@@ -120,6 +120,7 @@
   <button data-view="products">Wine list</button>
   <button data-view="packs">Gift packs</button>
   <button data-view="recon">Reconcile</button>
+  <button data-view="reports">Reports</button>
 </nav>
 
 <main id="appMain">
@@ -262,6 +263,33 @@
     </div>
   </div>
 
+  <!-- ========== REPORTS ========== -->
+  <div id="viewReports" class="view" style="display:none">
+    <div class="panel">
+      <h2>Sales &amp; margin reports</h2>
+      <p class="hint">Built from invoices since July 2025. Margin uses each wine's current case cost, so treat it as a close estimate. Diplomat and discounted pricing flow through as invoiced.</p>
+      <div class="grid3">
+        <div><label for="rpFrom">From</label><input id="rpFrom" type="date"></div>
+        <div><label for="rpTo">To</label><input id="rpTo" type="date"></div>
+        <div><label for="rpGroup">Group by</label>
+          <select id="rpGroup">
+            <option value="month">Month</option>
+            <option value="wine">Wine</option>
+            <option value="customer">Customer</option>
+            <option value="supplier">Supplier</option>
+          </select></div>
+      </div>
+      <button class="btn" id="rpRun">Run report</button>
+      <button class="btn" id="rpCsv" style="background:#7A6E63;display:none">Download as spreadsheet</button>
+      <div class="msg" id="rpMsg"></div>
+    </div>
+    <div id="rpChartWrap" class="panel" style="display:none"><h2 id="rpChartTitle" style="font-size:.95rem"></h2><div id="rpChart"></div></div>
+    <div class="wrap"><table id="rpTable" style="display:none">
+      <thead><tr><th id="rpCol0">Group</th><th class="num">Invoices</th><th class="num">Bottles</th><th class="num">Revenue €</th><th class="num">Est. cost €</th><th class="num">Margin €</th><th class="num">Margin %</th></tr></thead>
+      <tbody id="rpBody"></tbody>
+    </table></div>
+  </div>
+
   <!-- ========== RECONCILE ========== -->
   <div id="viewRecon" class="view" style="display:none">
     <div class="panel">
@@ -299,7 +327,8 @@
     <div style="background:var(--paper);max-width:760px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2 class="serif" id="invTitle" style="font-size:1.15rem"></h2>
-        <button onclick="closeInv()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+        <button onclick="printInvoice()" style="margin-left:auto;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print</button>
+        <button onclick="closeInv()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
       </div>
       <p class="hint" id="invMeta" style="margin:.2rem 0 .8rem"></p>
       <div class="wrap"><table>
@@ -366,7 +395,7 @@ function showLogin(){
   $("viewLogin").style.display="block";
   $("mainNav").style.display="none";
   $("whoBox").style.display="none";
-  ["viewStock","viewMove","viewHistory","viewProducts","viewPacks","viewRecon"].forEach(v=>$(v).style.display="none");
+  ["viewStock","viewMove","viewHistory","viewProducts","viewPacks","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
 }
 async function enter(session){
   $("viewLogin").style.display="none";
@@ -417,6 +446,8 @@ function switchView(v){
   $("viewProducts").style.display= v==="products"?"block":"none";
   $("viewPacks").style.display   = v==="packs"?"block":"none";
   $("viewRecon").style.display   = v==="recon"?"block":"none";
+  $("viewReports").style.display = v==="reports"?"block":"none";
+  if(v==="reports" && !window._rpInit){ window._rpInit=1; rpDefaults(); }
   if(v==="packs") renderPacks();
   if(v==="stock") loadStock();
   if(v==="history") loadHistory();
@@ -705,9 +736,10 @@ async function openInvoice(id){
   $("invBody").innerHTML=""; $("invTotals").textContent="";
   $("invWrap").style.display="block";
   const {data:inv, error} = await db.from("invoices")
-    .select("*, customers(name,address1,eircode)").eq("id",id).maybeSingle();
+    .select("*, customers(name,address1,address2,address3,address4,eircode,phone)").eq("id",id).maybeSingle();
   if(error || !inv){ $("invMeta").textContent = "This invoice isn't in the system (history before July 2025 hasn't been loaded)."; return; }
   const {data:lines} = await db.from("invoice_lines").select("*").eq("invoice_id",id).order("id");
+  window._curInv = {inv, lines: lines||[]};
   $("invMeta").textContent = inv.invoice_date+" — "+(inv.customers?.name||"")+
     (inv.cust_order_no?" — order "+inv.cust_order_no:"")+
     (inv.delivery_comment?" — "+inv.delivery_comment:"");
@@ -717,6 +749,51 @@ async function openInvoice(id){
     <td class="dim">${esc(l.rotation_number||"")}</td></tr>`).join("");
   $("invTotals").innerHTML = "Net €"+eur(inv.net_total)+" &nbsp;·&nbsp; VAT €"+eur(inv.vat)+" &nbsp;·&nbsp; <strong>Total €"+eur(inv.gross_total)+"</strong>"+(inv.discount>0?" &nbsp;(discount €"+eur(inv.discount)+")":"");
 }
+
+function printInvoice(){
+  if(!window._curInv) return;
+  const {inv, lines} = window._curInv;
+  const c = inv.customers||{};
+  const addr = [c.name,c.address1,c.address2,c.address3,c.address4,c.eircode].filter(x=>x&&String(x).trim()).map(esc).join("<br>");
+  const rows = lines.map(l=>`<tr><td>${esc(l.description)}</td><td class="r">${l.qty}</td><td>${esc(l.unit)}</td>
+    <td class="r">${eur(l.case_price)}</td><td class="r">${eur(l.line_total)}</td></tr>`).join("");
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv.id}</title><style>
+    body{font-family:Georgia,serif;color:#222;margin:2.2cm 2cm;font-size:11pt}
+    .head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #5C1A2E;padding-bottom:.5em;margin-bottom:1.4em}
+    h1{font-size:20pt;color:#5C1A2E;margin:0}
+    .co{font-size:9pt;color:#555;text-align:right;line-height:1.4}
+    .meta{display:flex;justify-content:space-between;margin-bottom:1.6em}
+    .meta div{line-height:1.5}
+    .lbl{font-size:8pt;letter-spacing:.08em;color:#888;text-transform:uppercase}
+    table{width:100%;border-collapse:collapse;font-size:10.5pt}
+    th{font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em;color:#666;text-align:left;border-bottom:1.5px solid #5C1A2E;padding:.35em .4em}
+    td{padding:.35em .4em;border-bottom:1px solid #e5ddd2}
+    .r{text-align:right;font-variant-numeric:tabular-nums}
+    .tot{margin-top:1.2em;text-align:right;line-height:1.7}
+    .tot strong{font-size:13pt}
+    .foot{margin-top:3em;font-size:8pt;color:#999;font-style:italic;border-top:1px solid #e5ddd2;padding-top:.6em}
+  </style></head><body>
+  <div class="head"><h1>Moores&rsquo; Wines</h1>
+    <div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
+  <div class="meta">
+    <div><span class="lbl">Invoice to</span><br>${addr||"—"}</div>
+    <div style="text-align:right"><span class="lbl">Invoice</span><br><strong>No. ${inv.id}</strong><br>${inv.invoice_date}
+    ${inv.cust_order_no?"<br>Your order: "+esc(inv.cust_order_no):""}</div>
+  </div>
+  ${inv.delivery_comment?"<p style='font-size:9.5pt;color:#555'>"+esc(inv.delivery_comment)+"</p>":""}
+  <table><thead><tr><th>Description</th><th class="r">Qty</th><th>Unit</th><th class="r">Price €</th><th class="r">Total €</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div class="tot">
+    ${inv.discount>0?"Discount: €"+eur(inv.discount)+"<br>":""}
+    Net: €${eur(inv.net_total)}<br>VAT: €${eur(inv.vat)}<br>
+    <strong>Total: €${eur(inv.gross_total)}</strong>
+  </div>
+  <div class="foot">Reprinted from the Moores&rsquo; Wines Stock Book — ${new Date().toISOString().slice(0,10)}</div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
 function closeInv(){ $("invWrap").style.display="none"; }
 
 /* ==================== WEEKLY RECONCILIATION ==================== */
@@ -810,6 +887,74 @@ async function postRecAdj(code, diff, btn){
   if(error){ btn.disabled=false; alert("Not saved: "+error.message); return; }
   btn.textContent="Posted ✓";
 }
+
+/* ==================== REPORTS ==================== */
+let rpLast=null;
+function rpDefaults(){
+  const today=new Date().toISOString().slice(0,10);
+  $("rpFrom").value="2025-07-01"; $("rpTo").value=today;
+}
+$("rpRun").onclick = async ()=>{
+  const msg=$("rpMsg"); msg.textContent="Crunching…"; msg.className="msg ok";
+  const from=$("rpFrom").value, to=$("rpTo").value, grp=$("rpGroup").value;
+  const {data:sups} = await db.from("suppliers").select("id,name");
+  const supn={}; (sups||[]).forEach(s=>supn[s.id]=s.name);
+  let lines=[], off=0;
+  for(;;){
+    const {data, error} = await db.from("v_report_lines")
+      .select("invoice_id,invoice_date,customer_id,customer,product_id,supplier_id,wine,qty,unit,line_total,bottles,est_cost")
+      .gte("invoice_date",from).lte("invoice_date",to).range(off,off+999);
+    if(error){ msg.textContent="Report failed — has patch_reporting.sql been run in Supabase? ("+error.message+")"; msg.className="msg err"; return; }
+    lines=lines.concat(data);
+    if(data.length<1000) break;
+    off+=1000;
+    msg.textContent="Crunching… "+lines.length.toLocaleString()+" lines so far";
+  }
+  const agg={};
+  for(const l of lines){
+    let key, label;
+    if(grp==="month"){ key=l.invoice_date.slice(0,7); label=key; }
+    else if(grp==="wine"){ key="p"+l.product_id; label=l.wine||"(non-stock line)"; }
+    else if(grp==="customer"){ key="c"+l.customer_id; label=l.customer||("Customer "+l.customer_id); }
+    else { key="s"+(l.supplier_id||0); label=supn[l.supplier_id]||"(no supplier)"; }
+    const a = agg[key] = agg[key]||{label, invs:new Set(), bottles:0, rev:0, cost:0};
+    a.invs.add(l.invoice_id); a.bottles+=Number(l.bottles)||0; a.rev+=Number(l.line_total)||0; a.cost+=Number(l.est_cost)||0;
+  }
+  let rows = Object.values(agg).map(a=>({label:a.label, n:a.invs.size, bottles:Math.round(a.bottles),
+    rev:a.rev, cost:a.cost, margin:a.rev-a.cost, pct:a.rev>0?100*(a.rev-a.cost)/a.rev:0}));
+  rows.sort((x,y)=> grp==="month" ? (x.label<y.label?-1:1) : y.rev-x.rev);
+  rpLast={rows, grp};
+  $("rpCol0").textContent = {month:"Month",wine:"Wine",customer:"Customer",supplier:"Supplier"}[grp];
+  $("rpBody").innerHTML = rows.map(r=>`<tr><td>${esc(r.label)}</td><td class="num">${r.n}</td><td class="num">${r.bottles.toLocaleString()}</td>
+    <td class="num">${eur(r.rev)}</td><td class="num">${eur(r.cost)}</td>
+    <td class="num${r.margin<0?" neg":""}">${eur(r.margin)}</td><td class="num${r.pct<0?" neg":""}">${r.pct.toFixed(1)}%</td></tr>`).join("");
+  const tot=rows.reduce((s,r)=>({rev:s.rev+r.rev,cost:s.cost+r.cost,bottles:s.bottles+r.bottles}),{rev:0,cost:0,bottles:0});
+  $("rpBody").innerHTML += `<tr style="background:#F3E9DC;font-weight:600"><td>TOTAL</td><td></td><td class="num">${tot.bottles.toLocaleString()}</td>
+    <td class="num">${eur(tot.rev)}</td><td class="num">${eur(tot.cost)}</td><td class="num">${eur(tot.rev-tot.cost)}</td>
+    <td class="num">${tot.rev>0?(100*(tot.rev-tot.cost)/tot.rev).toFixed(1):0}%</td></tr>`;
+  $("rpTable").style.display="table"; $("rpCsv").style.display="inline-block";
+  // simple bar chart of revenue
+  const top = grp==="month" ? rows : rows.slice(0,12);
+  const max = Math.max(...top.map(r=>r.rev),1);
+  $("rpChartTitle").textContent = "Revenue by "+$("rpCol0").textContent.toLowerCase()+(grp!=="month"?" (top 12)":"");
+  $("rpChart").innerHTML = top.map(r=>`
+    <div style="display:flex;align-items:center;gap:.6rem;margin:.22rem 0">
+      <div style="width:170px;font-size:.78rem;text-align:right;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(r.label)}</div>
+      <div style="flex:1;background:var(--paper);border-radius:4px"><div style="width:${(100*r.rev/max).toFixed(1)}%;background:var(--claret);height:16px;border-radius:4px"></div></div>
+      <div style="width:90px;font-size:.78rem;font-variant-numeric:tabular-nums">€${eur(r.rev)}</div>
+    </div>`).join("");
+  $("rpChartWrap").style.display="block";
+  msg.textContent = rows.length+" groups, "+$("rpFrom").value+" to "+$("rpTo").value+".";
+};
+$("rpCsv").onclick = ()=>{
+  if(!rpLast) return;
+  const head=[$("rpCol0").textContent,"Invoices","Bottles","Revenue","Est cost","Margin","Margin %"];
+  const csv=[head.join(",")].concat(rpLast.rows.map(r=>
+    [`"${r.label.replace(/"/g,'""')}"`,r.n,r.bottles,r.rev.toFixed(2),r.cost.toFixed(2),r.margin.toFixed(2),r.pct.toFixed(1)].join(","))).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="moores_report_"+rpLast.grp+".csv"; a.click();
+};
 
 init();
 </script>
