@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moores' Wines — Stock Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --claret:#5C1A2E;        /* deep claret — masthead & primary actions */
+    --claret-dark:#43121F;
+    --paper:#FAF7F2;         /* warm paper background */
+    --ink:#2B2320;           /* near-black warm ink */
+    --line:#E4DCD2;          /* hairline rules */
+    --bond:#8A6D1F;          /* under-bond amber (wax seal) */
+    --bond-bg:#F5EDD8;
+    --dp:#2F5D3A;            /* duty-paid green */
+    --dp-bg:#E4EFE4;
+    --neg:#A03030;
+    --muted:#7A6E63;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:16px}
+  body{font-family:'Public Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+  h1,h2,.serif{font-family:'Libre Caslon Text',Georgia,serif}
+
+  /* ---------- Masthead ---------- */
+  header{background:var(--claret);color:#F6EDE4;padding:.9rem 1.2rem;display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap}
+  header h1{font-size:1.25rem;font-weight:700;letter-spacing:.02em}
+  header .sub{font-size:.8rem;opacity:.75;font-style:italic;font-family:'Libre Caslon Text',serif}
+  header .who{margin-left:auto;font-size:.8rem;opacity:.85;display:flex;gap:.8rem;align-items:center}
+  header button{background:none;border:1px solid rgba(246,237,228,.4);color:#F6EDE4;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.78rem}
+  header button:hover{background:rgba(246,237,228,.12)}
+
+  nav{background:var(--card);border-bottom:1px solid var(--line);display:flex;gap:.25rem;padding:0 .8rem;overflow-x:auto}
+  nav button{background:none;border:none;border-bottom:3px solid transparent;padding:.8rem 1rem;font-size:.92rem;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
+  nav button.active{color:var(--claret);border-bottom-color:var(--claret)}
+  nav button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--claret);outline-offset:2px}
+
+  main{max-width:1100px;margin:0 auto;padding:1.2rem}
+
+  /* ---------- Login ---------- */
+  .login-wrap{max-width:380px;margin:8vh auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2rem}
+  .login-wrap h2{font-size:1.3rem;margin-bottom:.3rem}
+  .login-wrap p{font-size:.85rem;color:var(--muted);margin-bottom:1.2rem}
+
+  /* ---------- Forms ---------- */
+  label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);margin:.7rem 0 .25rem;text-transform:uppercase;letter-spacing:.04em}
+  input,select{width:100%;padding:.55rem .6rem;border:1px solid var(--line);border-radius:5px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
+  .btn{display:inline-block;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.6rem 1.2rem;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:1rem}
+  .btn:hover{background:var(--claret-dark)}
+  .btn[disabled]{opacity:.5;cursor:default}
+  .msg{margin-top:.8rem;font-size:.85rem;padding:.6rem .8rem;border-radius:5px;display:none}
+  .msg.err{display:block;background:#F7E3E3;color:var(--neg)}
+  .msg.ok{display:block;background:var(--dp-bg);color:var(--dp)}
+
+  /* ---------- Cards / summary ---------- */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.8rem;margin-bottom:1.2rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.9rem 1rem}
+  .card .k{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .card .v{font-family:'Libre Caslon Text',serif;font-size:1.5rem;margin-top:.2rem}
+  .card.bond{border-left:4px solid var(--bond)}
+  .card.dp{border-left:4px solid var(--dp)}
+  .card.tot{border-left:4px solid var(--claret)}
+
+  /* ---------- Tables ---------- */
+  .tools{display:flex;gap:.6rem;align-items:center;margin-bottom:.8rem;flex-wrap:wrap}
+  .tools input[type=search]{max-width:320px}
+  .tools .count{font-size:.8rem;color:var(--muted);margin-left:auto}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:.88rem}
+  th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:.55rem .7rem;border-bottom:2px solid var(--line);background:#FDFCFA}
+  td{padding:.5rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;font-size:.7rem;font-weight:700;padding:.12rem .5rem;border-radius:99px;letter-spacing:.03em}
+  .tag.bond{background:var(--bond-bg);color:var(--bond)}
+  .tag.dp{background:var(--dp-bg);color:var(--dp)}
+  .neg{color:var(--neg);font-weight:600}
+  .dim{color:var(--muted)}
+  .wrap{overflow-x:auto}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:1.1rem 1.2rem;margin-bottom:1.2rem}
+  .panel h2{font-size:1.05rem;margin-bottom:.2rem}
+  .panel .hint{font-size:.8rem;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 1rem}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 1rem}
+  @media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  /* product picker */
+  .picker{position:relative}
+  .picker ul{position:absolute;z-index:20;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:0 0 6px 6px;max-height:240px;overflow-y:auto;list-style:none;box-shadow:0 6px 16px rgba(43,35,32,.12)}
+  .picker li{padding:.45rem .6rem;cursor:pointer;font-size:.88rem}
+  .picker li:hover,.picker li.hl{background:var(--paper)}
+  .picker li .cs{color:var(--muted);font-size:.78rem}
+  .chosen{margin-top:.35rem;font-size:.85rem;color:var(--dp);font-weight:600;display:none}
+
+  footer{padding:1.5rem;text-align:center;font-size:.75rem;color:var(--muted);font-style:italic;font-family:'Libre Caslon Text',serif}
+  @media (prefers-reduced-motion: no-preference){
+    .view{animation:fade .18s ease}
+    @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Moores&rsquo; Wines</h1>
+  <span class="sub">Stock Book</span>
+  <span class="who" id="whoBox" style="display:none"><span id="whoEmail"></span><button id="btnLogout">Sign out</button></span>
+</header>
+
+<nav id="mainNav" style="display:none">
+  <button data-view="stock" class="active">Stock on hand</button>
+  <button data-view="move">Record a movement</button>
+  <button data-view="history">Movement history</button>
+  <button data-view="products">Wine list</button>
+  <button data-view="packs">Gift packs</button>
+</nav>
+
+<main id="appMain">
+
+  <!-- ========== LOGIN ========== -->
+  <div id="viewLogin" class="login-wrap view">
+    <h2>Sign in</h2>
+    <p>Use the email and password set up in Supabase.</p>
+    <label for="liEmail">Email</label>
+    <input id="liEmail" type="email" autocomplete="username">
+    <label for="liPass">Password</label>
+    <input id="liPass" type="password" autocomplete="current-password">
+    <button class="btn" id="btnLogin">Sign in</button>
+    <div class="msg" id="liMsg"></div>
+  </div>
+
+  <!-- ========== STOCK ========== -->
+  <div id="viewStock" class="view" style="display:none">
+    <div class="cards">
+      <div class="card bond"><div class="k">Under bond value</div><div class="v" id="cardUB">—</div></div>
+      <div class="card dp"><div class="k">Duty paid value</div><div class="v" id="cardDP">—</div></div>
+      <div class="card tot"><div class="k">Total stock value</div><div class="v" id="cardTot">—</div></div>
+    </div>
+    <div class="tools">
+      <input type="search" id="stockSearch" placeholder="Search wines…">
+      <select id="stockLoc" style="max-width:260px"><option value="">All locations</option></select>
+      <span class="count" id="stockCount"></span>
+    </div>
+    <div class="wrap"><table id="stockTable">
+      <thead><tr>
+        <th>Wine</th><th>Case</th><th>Location</th><th>Status</th>
+        <th class="num">Cases</th><th class="num">Bottles</th>
+        <th class="num">Cost €</th><th class="num">Duty €</th><th class="num">Value €</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="dim" id="stockEmpty" style="display:none;margin-top:1rem">
+      No stock recorded yet. Stock appears here as movements are entered — start with your opening stock.
+    </p>
+  </div>
+
+  <!-- ========== RECORD MOVEMENT ========== -->
+  <div id="viewMove" class="view" style="display:none">
+    <div class="panel">
+      <h2>Record a stock movement</h2>
+      <p class="hint">Every change to stock is a movement — nothing is ever edited directly, so there is always a full audit trail.</p>
+
+      <label for="mvType">What happened?</label>
+      <select id="mvType">
+        <option value="receipt">Goods received from supplier</option>
+        <option value="bond_release">Release from bond (duty becomes payable)</option>
+        <option value="transfer">Transfer between locations</option>
+        <option value="sale">Goods out to a customer</option>
+        <option value="adj_in">Adjustment — stock IN (found / opening stock / correction)</option>
+        <option value="adj_out">Adjustment — stock OUT (breakage / samples / correction)</option>
+      </select>
+
+      <label for="mvProdSearch">Wine</label>
+      <div class="picker">
+        <input id="mvProdSearch" placeholder="Start typing the wine name…" autocomplete="off">
+        <ul id="mvProdList" style="display:none"></ul>
+      </div>
+      <div class="chosen" id="mvChosen"></div>
+
+      <div class="grid3">
+        <div><label for="mvCases">Cases</label><input id="mvCases" type="number" min="0" step="1" value="0"></div>
+        <div><label for="mvBottles">+ loose bottles</label><input id="mvBottles" type="number" min="0" step="1" value="0"></div>
+        <div><label for="mvDate">Date</label><input id="mvDate" type="date"></div>
+      </div>
+
+      <div class="grid2">
+        <div id="mvFromWrap"><label for="mvFrom">From location</label><select id="mvFrom"></select></div>
+        <div id="mvToWrap"><label for="mvTo">To location</label><select id="mvTo"></select></div>
+      </div>
+
+      <div class="grid2">
+        <div><label for="mvRot">Rotation number <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="mvRot" placeholder="e.g. 26/0142"></div>
+        <div><label for="mvRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="mvRef" placeholder="Invoice no., PO no…"></div>
+      </div>
+
+      <div id="mvPackWrap" class="panel" style="display:none;background:var(--bond-bg);border-color:var(--bond)">
+        <h2 style="font-size:.95rem">This is a gift pack — these component bottles will be deducted instead</h2>
+        <p class="hint">Per pack sold. Swap a wine here if a substitute was used for this order.</p>
+        <div id="mvPackLines"></div>
+      </div>
+      <button class="btn" id="btnSaveMove">Save movement</button>
+      <div class="msg" id="mvMsg"></div>
+    </div>
+  </div>
+
+  <!-- ========== HISTORY ========== -->
+  <div id="viewHistory" class="view" style="display:none">
+    <div class="tools">
+      <input type="search" id="histSearch" placeholder="Search movements…">
+      <span class="count" id="histCount"></span>
+    </div>
+    <div class="wrap"><table>
+      <thead><tr>
+        <th>Date</th><th>Type</th><th>Wine</th><th class="num">Qty</th>
+        <th>From</th><th>To</th><th>Rotation</th><th>Ref</th>
+      </tr></thead>
+      <tbody id="histBody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- ========== GIFT PACKS ========== -->
+  <div id="viewPacks" class="view" style="display:none">
+    <div class="panel">
+      <h2>Create a gift pack</h2>
+      <p class="hint">A pack is sellable but holds no stock — selling one automatically deducts its component wines.</p>
+      <div class="grid2">
+        <div><label for="pkName">Pack name</label><input id="pkName" placeholder="e.g. Xmas 1 2026"></div>
+        <div><label for="pkPrice">Selling price € (per pack)</label><input id="pkPrice" type="number" min="0" step="0.01" value="0"></div>
+      </div>
+      <label>Components (bottles per one pack)</label>
+      <div id="pkLines"></div>
+      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="pkAddLine">+ add component</button>
+      <br><button class="btn" id="pkSave">Create pack</button>
+      <div class="msg" id="pkMsg"></div>
+    </div>
+    <div class="panel">
+      <h2>Existing packs</h2>
+      <div class="wrap"><table><thead><tr><th>Pack</th><th>Contains</th><th class="num">Price €</th></tr></thead>
+      <tbody id="pkBody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ========== DRILL-DOWN ========== -->
+  <div id="drillWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.45);z-index:50" onclick="if(event.target===this)closeDrill()">
+    <div style="background:var(--paper);max-width:900px;margin:4vh auto;max-height:92vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" id="drillTitle" style="font-size:1.15rem"></h2>
+        <button onclick="closeDrill()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" id="drillSub" style="margin:.2rem 0 .8rem"></p>
+      <div class="wrap"><table>
+        <thead><tr><th>Date</th><th>Type</th><th>From</th><th>To</th><th class="num">Qty</th><th class="num">Balance</th><th>Rotation</th><th>Ref</th></tr></thead>
+        <tbody id="drillBody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- ========== PRODUCTS ========== -->
+  <div id="viewProducts" class="view" style="display:none">
+    <div class="tools">
+      <input type="search" id="prodSearch" placeholder="Search the wine list…">
+      <label style="display:flex;align-items:center;gap:.35rem;margin:0;text-transform:none;font-size:.85rem;font-weight:500;color:var(--ink)">
+        <input type="checkbox" id="prodShowOld" style="width:auto"> show obsolete
+      </label>
+      <span class="count" id="prodCount"></span>
+    </div>
+    <div class="wrap"><table>
+      <thead><tr>
+        <th>Wine</th><th class="num">Btls/case</th><th class="num">Bottle ml</th>
+        <th class="num">Case cost €</th><th class="num">Duty/case €</th><th class="num">List price €</th>
+      </tr></thead>
+      <tbody id="prodBody"></tbody>
+    </table></div>
+  </div>
+
+</main>
+<footer>Bottled &amp; balanced — Moores&rsquo; Wines stock system</footer>
+
+<script>
+const SUPABASE_URL = "https://fnjmyixiztewkuygqpvy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_mAGDD8Y_TlXEzz4ltUlSlw_9YLxTdKP";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const eur = n => (n==null?"—":Number(n).toLocaleString("en-IE",{minimumFractionDigits:2,maximumFractionDigits:2}));
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let products=[], locations=[], dutyCats={}, chosenProduct=null, components=[], packLines=[];
+
+/* ---------- fetch helper: pages past the 1000-row API limit ---------- */
+async function fetchAll(table, columns, order){
+  let rows=[], from=0, page=1000;
+  for(;;){
+    let q = db.from(table).select(columns).range(from, from+page-1);
+    if(order) q = q.order(order);
+    const {data, error} = await q;
+    if(error) throw error;
+    rows = rows.concat(data);
+    if(data.length < page) break;
+    from += page;
+  }
+  return rows;
+}
+
+/* ==================== AUTH ==================== */
+async function init(){
+  const {data:{session}} = await db.auth.getSession();
+  session ? enter(session) : showLogin();
+}
+function showLogin(){
+  $("viewLogin").style.display="block";
+  $("mainNav").style.display="none";
+  $("whoBox").style.display="none";
+  ["viewStock","viewMove","viewHistory","viewProducts","viewPacks"].forEach(v=>$(v).style.display="none");
+}
+async function enter(session){
+  $("viewLogin").style.display="none";
+  $("mainNav").style.display="flex";
+  $("whoBox").style.display="flex";
+  $("whoEmail").textContent = session.user.email;
+  await loadRefData();
+  switchView("stock");
+}
+$("btnLogin").onclick = async ()=>{
+  const m=$("liMsg"); m.className="msg";
+  $("btnLogin").disabled=true;
+  const {data, error} = await db.auth.signInWithPassword({email:$("liEmail").value.trim(), password:$("liPass").value});
+  $("btnLogin").disabled=false;
+  if(error){ m.textContent = error.message==="Invalid login credentials" ? "Email or password not recognised — check both and try again." : error.message; m.className="msg err"; return; }
+  enter(data.session);
+};
+$("liPass").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnLogin").click()});
+$("btnLogout").onclick = async ()=>{ await db.auth.signOut(); location.reload(); };
+
+/* ==================== REFERENCE DATA ==================== */
+async function loadRefData(){
+  const [locs, cats, prods, comps] = await Promise.all([
+    fetchAll("locations","id,name,duty_status","id"),
+    fetchAll("duty_categories","id,name,duty_per_case","id"),
+    fetchAll("products","id,name,bottles_in_case,bottle_size_ml,case_cost,case_price,duty_category_id,obsolete","name"),
+    fetchAll("product_components","id,pack_id,component_id,qty_bottles").catch(()=>[]),
+  ]);
+  locations = locs;
+  cats.forEach(c=>dutyCats[c.id]=c);
+  products = prods;
+  components = comps;
+  $("stockLoc").innerHTML = '<option value="">All locations</option>'+locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  const opts = locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  $("mvFrom").innerHTML = opts;
+  $("mvTo").innerHTML = opts;
+  $("mvDate").value = new Date().toISOString().slice(0,10);
+  applyMoveType();
+}
+
+/* ==================== NAV ==================== */
+document.querySelectorAll("#mainNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+function switchView(v){
+  document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  $("viewStock").style.display   = v==="stock"?"block":"none";
+  $("viewMove").style.display    = v==="move"?"block":"none";
+  $("viewHistory").style.display = v==="history"?"block":"none";
+  $("viewProducts").style.display= v==="products"?"block":"none";
+  $("viewPacks").style.display   = v==="packs"?"block":"none";
+  if(v==="packs") renderPacks();
+  if(v==="stock") loadStock();
+  if(v==="history") loadHistory();
+  if(v==="products") renderProducts();
+}
+
+/* ==================== STOCK VIEW ==================== */
+let stockRows=[];
+async function loadStock(){
+  try{ stockRows = await fetchAll("v_stock_valuation","*","product"); }
+  catch(e){ stockRows=[]; }
+  renderStock();
+}
+function renderStock(){
+  const q = $("stockSearch").value.trim().toLowerCase();
+  const lf = $("stockLoc").value;
+  const rows = stockRows.filter(r=>(!q || r.product.toLowerCase().includes(q)) && (!lf || String(r.location_id)===lf));
+  let ub=0, dp=0;
+  stockRows.forEach(r=>{ r.duty_status==="under_bond" ? ub+=Number(r.total_value) : dp+=Number(r.total_value); });
+  $("cardUB").textContent = "€"+eur(ub);
+  $("cardDP").textContent = "€"+eur(dp);
+  $("cardTot").textContent= "€"+eur(ub+dp);
+  const tb = $("stockTable").querySelector("tbody");
+  tb.innerHTML = rows.map(r=>{
+    const negC = r.qty_bottles<0 ? ' class="num neg"' : ' class="num"';
+    const tag = r.duty_status==="under_bond" ? '<span class="tag bond">Under bond</span>' : '<span class="tag dp">Duty paid</span>';
+    const p = products.find(p=>p.id===r.product_id);
+    const caseTxt = p ? p.bottles_in_case+"×"+p.bottle_size_ml+"ml" : "";
+    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${caseTxt}</td>
+      <td>${esc(r.location)}</td><td>${tag}</td>
+      <td${negC}>${r.cases}</td><td${negC}>${r.qty_bottles}</td>
+      <td class="num">${eur(r.cost_value)}</td><td class="num">${eur(r.duty_value)}</td><td class="num"><strong>${eur(r.total_value)}</strong></td></tr>`;
+  }).join("");
+  $("stockCount").textContent = rows.length ? rows.length+" lines" : "";
+  $("stockEmpty").style.display = stockRows.length ? "none" : "block";
+}
+$("stockSearch").oninput = renderStock;
+$("stockLoc").onchange = renderStock;
+
+/* ==================== MOVEMENT ENTRY ==================== */
+const typeRules = {
+  receipt:      {from:false, to:true,  hint:"Goods arriving from a supplier into a location."},
+  bond_release: {from:1,     to:2,     hint:"Under Bond → Duty Paid at the bond. Duty becomes payable."},
+  transfer:     {from:true,  to:true,  hint:"Move stock between locations."},
+  sale:         {from:true,  to:false, hint:"Goods leaving to a customer."},
+  adj_in:       {from:false, to:true,  hint:"Stock added: opening stock, count corrections, returns."},
+  adj_out:      {from:true,  to:false, hint:"Stock removed: breakage, samples, personal use, corrections."},
+};
+$("mvType").onchange = ()=>{applyMoveType(); showPackPanel();};
+function applyMoveType(){
+  const r = typeRules[$("mvType").value];
+  $("mvFromWrap").style.display = r.from?"block":"none";
+  $("mvToWrap").style.display   = r.to?"block":"none";
+  if(typeof r.from==="number"){ $("mvFrom").value=r.from; $("mvFrom").disabled=true; } else $("mvFrom").disabled=false;
+  if(typeof r.to==="number"){ $("mvTo").value=r.to; $("mvTo").disabled=true; } else $("mvTo").disabled=false;
+}
+
+/* product picker */
+$("mvProdSearch").oninput = ()=>{
+  chosenProduct=null; $("mvChosen").style.display="none";
+  const q=$("mvProdSearch").value.trim().toLowerCase();
+  const list=$("mvProdList");
+  if(q.length<2){ list.style.display="none"; return; }
+  const hits = products.filter(p=>!p.obsolete && p.name.toLowerCase().includes(q)).slice(0,12);
+  const more = products.filter(p=>p.obsolete && p.name.toLowerCase().includes(q)).slice(0, 12-hits.length);
+  const all = hits.concat(more);
+  list.innerHTML = all.map(p=>`<li data-id="${p.id}">${esc(p.name)} <span class="cs">(${p.bottles_in_case}×${p.bottle_size_ml}ml${p.obsolete?", obsolete":""})</span></li>`).join("") || "<li class='dim'>No wines match</li>";
+  list.style.display="block";
+  list.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+    chosenProduct = products.find(p=>p.id==li.dataset.id);
+    $("mvProdSearch").value = chosenProduct.name;
+    $("mvChosen").textContent = "Selected: "+chosenProduct.name+" — case of "+chosenProduct.bottles_in_case;
+    $("mvChosen").style.display="block";
+    list.style.display="none";
+    showPackPanel();
+  });
+};
+document.addEventListener("click",e=>{ if(!e.target.closest(".picker")) $("mvProdList").style.display="none"; });
+
+$("btnSaveMove").onclick = async ()=>{
+  const m=$("mvMsg"); m.className="msg";
+  const fail = t=>{ m.textContent=t; m.className="msg err"; };
+  if(!chosenProduct) return fail("Choose a wine from the list first.");
+  const cases=+$("mvCases").value||0, loose=+$("mvBottles").value||0;
+  const qty = cases*chosenProduct.bottles_in_case + loose;
+  if(qty<=0) return fail("Enter a quantity — cases, loose bottles, or both.");
+  const t=$("mvType").value, r=typeRules[t];
+  const row = {
+    movement_date: $("mvDate").value,
+    movement_type: t.startsWith("adj") ? "adjustment" : t,
+    product_id: chosenProduct.id,
+    qty_bottles: qty,
+    from_location_id: r.from ? +$("mvFrom").value : null,
+    to_location_id:   r.to   ? +$("mvTo").value   : null,
+    rotation_number: $("mvRot").value.trim() || null,
+    reference: $("mvRef").value.trim() || null,
+  };
+  if(t==="transfer" && row.from_location_id===row.to_location_id) return fail("From and To are the same location.");
+  $("btnSaveMove").disabled=true;
+  let error=null, savedTxt="";
+  if($("mvPackWrap").style.display==="block"){
+    // explode: one movement per component, qty = per-pack × packs (cases field = packs)
+    const nPacks = cases>0 ? cases : loose;   // packs may be entered in either box
+    const lines=[...document.querySelectorAll("#mvPackLines [data-ci]")].map(div=>({
+      pid:+div.querySelector(".pcProd").dataset.pid||0, per:+div.querySelector(".pcQty").value||0}));
+    if(lines.some(l=>!l.pid||l.per<=0)){ $("btnSaveMove").disabled=false; return fail("Every component line needs a wine chosen from the list and a bottle count."); }
+    const rows = lines.map(l=>({...row, product_id:l.pid, qty_bottles:l.per*nPacks,
+      reference:(row.reference?row.reference+" — ":"")+nPacks+"× "+chosenProduct.name}));
+    ({error} = await db.from("stock_movements").insert(rows));
+    savedTxt = "Saved: "+nPacks+" × "+chosenProduct.name+" as "+rows.length+" component movement"+(rows.length===1?"":"s")+".";
+  } else {
+    ({error} = await db.from("stock_movements").insert(row));
+    savedTxt = "Saved: "+qty+" bottle"+(qty===1?"":"s")+" of "+chosenProduct.name+".";
+  }
+  $("btnSaveMove").disabled=false;
+  if(error) return fail("Not saved — "+error.message);
+  m.textContent = savedTxt;
+  m.className="msg ok";
+  $("mvCases").value=0; $("mvBottles").value=0; $("mvRot").value=""; $("mvRef").value="";
+};
+
+
+function showPackPanel(){
+  const comps = chosenProduct ? packOf(chosenProduct.id) : [];
+  const isSaleOut = ["sale","adj_out"].includes($("mvType").value);
+  if(!comps.length || !isSaleOut){ $("mvPackWrap").style.display="none"; return; }
+  $("mvPackWrap").style.display="block";
+  $("mvPackLines").innerHTML = comps.map((c,i)=>{
+    const p=products.find(x=>x.id===c.component_id);
+    return `<div class="grid2" style="align-items:end" data-ci="${i}">
+      <div><div class="picker"><input class="pcProd" value="${esc(p?p.name:"")}" data-pid="${c.component_id}" autocomplete="off"><ul style="display:none"></ul></div></div>
+      <div><label>Bottles per pack</label><input class="pcQty" type="number" min="1" value="${c.qty_bottles}"></div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll("#mvPackLines .pcProd").forEach(inp=>{
+    const ul=inp.nextElementSibling;
+    inp.oninput=()=>{
+      inp.dataset.pid="";
+      const q=inp.value.trim().toLowerCase();
+      if(q.length<2){ul.style.display="none";return;}
+      const hits=products.filter(p=>!p.obsolete&&p.name.toLowerCase().includes(q)).slice(0,10);
+      ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${esc(p.name)}</li>`).join("")||"<li class='dim'>No match</li>";
+      ul.style.display="block";
+      ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+        inp.value=products.find(p=>p.id==li.dataset.id).name; inp.dataset.pid=li.dataset.id; ul.style.display="none";});
+    };
+  });
+}
+
+/* ==================== HISTORY ==================== */
+let histRows=[];
+async function loadHistory(){
+  const {data, error} = await db.from("stock_movements")
+    .select("id,movement_date,movement_type,qty_bottles,rotation_number,reference,products(name),from_l:locations!stock_movements_from_location_id_fkey(name),to_l:locations!stock_movements_to_location_id_fkey(name)")
+    .order("movement_date",{ascending:false}).order("id",{ascending:false}).limit(300);
+  histRows = error?[]:data;
+  renderHistory();
+}
+const typeNames={receipt:"Goods in",bond_release:"Bond release",transfer:"Transfer",sale:"Sale",adjustment:"Adjustment"};
+function renderHistory(){
+  const q=$("histSearch").value.trim().toLowerCase();
+  const rows = histRows.filter(r=>!q || (r.products?.name||"").toLowerCase().includes(q) || (r.reference||"").toLowerCase().includes(q) || (r.rotation_number||"").toLowerCase().includes(q));
+  $("histBody").innerHTML = rows.map(r=>`<tr>
+    <td class="dim">${r.movement_date}</td><td>${typeNames[r.movement_type]||r.movement_type}</td>
+    <td>${esc(r.products?.name||"—")}</td><td class="num">${r.qty_bottles}</td>
+    <td class="dim">${esc(r.from_l?.name||"—")}</td><td class="dim">${esc(r.to_l?.name||"—")}</td>
+    <td class="dim">${esc(r.rotation_number||"")}</td><td class="dim">${esc(r.reference||"")}</td></tr>`).join("");
+  $("histCount").textContent = rows.length ? rows.length+" of latest 300" : "No movements yet";
+}
+$("histSearch").oninput = renderHistory;
+
+/* ==================== PRODUCTS ==================== */
+function renderProducts(){
+  const q=$("prodSearch").value.trim().toLowerCase();
+  const showOld=$("prodShowOld").checked;
+  const rows = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q))).slice(0,400);
+  $("prodBody").innerHTML = rows.map(p=>{
+    const duty = dutyCats[p.duty_category_id]?.duty_per_case;
+    return `<tr${p.obsolete?' style="opacity:.55"':''}><td>${esc(p.name)}</td>
+      <td class="num">${p.bottles_in_case}</td><td class="num">${p.bottle_size_ml}</td>
+      <td class="num">${eur(p.case_cost)}</td><td class="num">${eur(duty)}</td><td class="num">${eur(p.case_price)}</td></tr>`;
+  }).join("");
+  const total = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q))).length;
+  $("prodCount").textContent = total>400 ? "showing 400 of "+total : total+" wines";
+}
+$("prodSearch").oninput = renderProducts;
+$("prodShowOld").onchange = renderProducts;
+
+/* ==================== DRILL-DOWN ==================== */
+async function openDrill(pid){
+  const p = products.find(x=>x.id===pid); if(!p) return;
+  $("drillTitle").textContent = p.name;
+  $("drillSub").textContent = "Case of "+p.bottles_in_case+" × "+p.bottle_size_ml+"ml — every movement, oldest first, with running balance in bottles.";
+  $("drillBody").innerHTML = "<tr><td colspan=8 class='dim'>Loading…</td></tr>";
+  $("drillWrap").style.display="block";
+  const {data, error} = await db.from("stock_movements")
+    .select("movement_date,movement_type,qty_bottles,rotation_number,reference,from_location_id,to_location_id")
+    .eq("product_id",pid).order("movement_date").order("id");
+  if(error||!data.length){ $("drillBody").innerHTML="<tr><td colspan=8 class='dim'>No movements recorded for this wine yet.</td></tr>"; return; }
+  const lname = id => (locations.find(l=>l.id===id)||{}).name||"—";
+  let bal=0;
+  $("drillBody").innerHTML = data.map(m=>{
+    const inn = m.to_location_id!=null, out = m.from_location_id!=null;
+    const delta = (inn&&out)?0:(inn?m.qty_bottles:-m.qty_bottles);
+    bal += delta;
+    const qtyTxt = (inn&&out)?("⇄ "+m.qty_bottles):((delta>0?"+":"")+delta);
+    return `<tr><td class="dim">${m.movement_date}</td><td>${typeNames[m.movement_type]||m.movement_type}</td>
+      <td class="dim">${out?esc(lname(m.from_location_id)):"—"}</td><td class="dim">${inn?esc(lname(m.to_location_id)):"—"}</td>
+      <td class="num${delta<0?" neg":""}">${qtyTxt}</td><td class="num"><strong>${bal}</strong></td>
+      <td class="dim">${esc(m.rotation_number||"")}</td><td class="dim">${esc(m.reference||"")}</td></tr>`;
+  }).join("");
+}
+function closeDrill(){ $("drillWrap").style.display="none"; }
+
+/* ==================== GIFT PACKS ==================== */
+function packOf(pid){ return components.filter(c=>c.pack_id===pid); }
+function pkLineHtml(i){
+  return `<div class="grid2" style="align-items:end" data-pk="${i}">
+    <div><div class="picker"><input class="pkProd" placeholder="Start typing a wine…" autocomplete="off" data-i="${i}"><ul style="display:none"></ul></div></div>
+    <div style="display:flex;gap:.6rem;align-items:end">
+      <div style="flex:1"><label>Bottles</label><input class="pkQty" type="number" min="1" value="1"></div>
+      <button onclick="this.closest('[data-pk]').remove()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.5rem .7rem;cursor:pointer">✕</button>
+    </div></div>`;
+}
+$("pkAddLine").onclick = ()=>{ $("pkLines").insertAdjacentHTML("beforeend", pkLineHtml(Date.now())); wirePkPickers(); };
+function wirePkPickers(){
+  document.querySelectorAll("#pkLines .pkProd").forEach(inp=>{
+    if(inp.dataset.wired) return; inp.dataset.wired=1;
+    const ul = inp.nextElementSibling;
+    inp.oninput = ()=>{
+      inp.dataset.pid="";
+      const q=inp.value.trim().toLowerCase();
+      if(q.length<2){ ul.style.display="none"; return; }
+      const hits = products.filter(p=>!p.obsolete && p.name.toLowerCase().includes(q)).slice(0,10);
+      ul.innerHTML = hits.map(p=>`<li data-id="${p.id}">${esc(p.name)} <span class="cs">(${p.bottles_in_case}×${p.bottle_size_ml}ml)</span></li>`).join("")||"<li class='dim'>No match</li>";
+      ul.style.display="block";
+      ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+        inp.value = products.find(p=>p.id==li.dataset.id).name;
+        inp.dataset.pid = li.dataset.id; ul.style.display="none";
+      });
+    };
+  });
+}
+$("pkSave").onclick = async ()=>{
+  const m=$("pkMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  const name=$("pkName").value.trim();
+  if(!name) return fail("Give the pack a name.");
+  const lines=[...document.querySelectorAll("#pkLines [data-pk]")].map(div=>({
+    pid:+div.querySelector(".pkProd").dataset.pid||0,
+    qty:+div.querySelector(".pkQty").value||0}));
+  const good=lines.filter(l=>l.pid&&l.qty>0);
+  if(!good.length) return fail("Add at least one component wine (choose it from the list).");
+  $("pkSave").disabled=true;
+  const {data:prod, error:e1} = await db.from("products").insert({
+    name:name, bottles_in_case:good.reduce((s,l)=>s+l.qty,0), bottle_size_ml:750,
+    duty_category_id: products.find(p=>p.id===good[0].pid).duty_category_id,
+    case_cost:0, case_price:+$("pkPrice").value||0, obsolete:false}).select().single();
+  if(e1){ $("pkSave").disabled=false; return fail("Not saved — "+e1.message); }
+  const {error:e2} = await db.from("product_components").insert(good.map(l=>({pack_id:prod.id, component_id:l.pid, qty_bottles:l.qty})));
+  $("pkSave").disabled=false;
+  if(e2) return fail("Pack created but components failed — "+e2.message);
+  products.push(prod); good.forEach(l=>components.push({pack_id:prod.id, component_id:l.pid, qty_bottles:l.qty}));
+  m.textContent="Pack created: "+name; m.className="msg ok";
+  $("pkName").value=""; $("pkPrice").value=0; $("pkLines").innerHTML=""; renderPacks();
+};
+function renderPacks(){
+  if(!$("pkLines").children.length){ $("pkLines").insertAdjacentHTML("beforeend", pkLineHtml(1)); wirePkPickers(); }
+  const packs=[...new Set(components.map(c=>c.pack_id))];
+  $("pkBody").innerHTML = packs.map(pid=>{
+    const p=products.find(x=>x.id===pid); if(!p) return "";
+    const parts=packOf(pid).map(c=>{const cp=products.find(x=>x.id===c.component_id);return c.qty_bottles+" × "+(cp?cp.name:c.component_id);}).join("<br>");
+    return `<tr><td>${esc(p.name)}</td><td class="dim">${parts}</td><td class="num">${eur(p.case_price)}</td></tr>`;
+  }).join("") || "<tr><td colspan=3 class='dim'>No packs yet — create the first one above.</td></tr>";
+}
+
+init();
+</script>
+</body>
+</html>
