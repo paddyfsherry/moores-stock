@@ -267,7 +267,7 @@
   <div id="viewReports" class="view" style="display:none">
     <div class="panel">
       <h2>Sales &amp; margin reports</h2>
-      <p class="hint">Built from invoices since July 2025. Margin uses each wine's current case cost, so treat it as a close estimate. Diplomat and discounted pricing flow through as invoiced.</p>
+      <p class="hint">Covers every invoice in the system — back to February 1997. Margin uses each wine's current case cost, so treat it as a close estimate. Diplomat and discounted pricing flow through as invoiced.</p>
       <div class="grid3">
         <div><label for="rpFrom">From</label><input id="rpFrom" type="date"></div>
         <div><label for="rpTo">To</label><input id="rpTo" type="date"></div>
@@ -278,6 +278,12 @@
             <option value="customer">Customer</option>
             <option value="supplier">Supplier</option>
           </select></div>
+      </div>
+      <div class="grid2">
+        <div><label for="rpWine">Wine filter <span style="text-transform:none;font-weight:400">(optional — code or pick a name)</span></label>
+          <input id="rpWine" list="rpWineList" placeholder="e.g. 3099 or start typing…"><datalist id="rpWineList"></datalist></div>
+        <div><label for="rpCust">Customer filter <span style="text-transform:none;font-weight:400">(optional)</span></label>
+          <input id="rpCust" list="rpCustList" placeholder="start typing a customer…"><datalist id="rpCustList"></datalist></div>
       </div>
       <button class="btn" id="rpRun">Run report</button>
       <button class="btn" id="rpCsv" style="background:#7A6E63;display:none">Download as spreadsheet</button>
@@ -890,20 +896,42 @@ async function postRecAdj(code, diff, btn){
 
 /* ==================== REPORTS ==================== */
 let rpLast=null;
-function rpDefaults(){
+async function rpDefaults(){
   const today=new Date().toISOString().slice(0,10);
-  $("rpFrom").value="2025-07-01"; $("rpTo").value=today;
+  $("rpFrom").value="1997-02-01"; $("rpTo").value=today;
+  $("rpWineList").innerHTML = products.map(p=>`<option value="${p.id} — ${esc(p.name)}">`).join("");
+  window._rpCust = await fetchAll("customers","id,name","name");
+  $("rpCustList").innerHTML = window._rpCust.map(c=>`<option value="${esc(c.name)}">`).join("");
 }
 $("rpRun").onclick = async ()=>{
   const msg=$("rpMsg"); msg.textContent="Crunching…"; msg.className="msg ok";
   const from=$("rpFrom").value, to=$("rpTo").value, grp=$("rpGroup").value;
+  // resolve optional filters
+  let fWine=null, fCust=null, fNote=[];
+  const wtxt=$("rpWine").value.trim();
+  if(wtxt){
+    const m=/^(\d+)/.exec(wtxt);
+    if(m && products.find(p=>p.id===+m[1])){ fWine=+m[1]; }
+    else { const p=products.find(p=>p.name.toLowerCase()===wtxt.toLowerCase()); if(p) fWine=p.id; }
+    if(!fWine){ msg.textContent="Wine filter not recognised — pick from the list or use the code."; msg.className="msg err"; return; }
+    fNote.push("wine "+fWine);
+  }
+  const ctxt=$("rpCust").value.trim();
+  if(ctxt){
+    const c=(window._rpCust||[]).find(c=>c.name.toLowerCase()===ctxt.toLowerCase());
+    if(!c){ msg.textContent="Customer filter not recognised — pick from the list."; msg.className="msg err"; return; }
+    fCust=c.id; fNote.push(ctxt);
+  }
   const {data:sups} = await db.from("suppliers").select("id,name");
   const supn={}; (sups||[]).forEach(s=>supn[s.id]=s.name);
   let lines=[], off=0;
   for(;;){
-    const {data, error} = await db.from("v_report_lines")
+    let q = db.from("v_report_lines")
       .select("invoice_id,invoice_date,customer_id,customer,product_id,supplier_id,wine,qty,unit,line_total,bottles,est_cost")
-      .gte("invoice_date",from).lte("invoice_date",to).range(off,off+999);
+      .gte("invoice_date",from).lte("invoice_date",to);
+    if(fWine) q=q.eq("product_id",fWine);
+    if(fCust) q=q.eq("customer_id",fCust);
+    const {data, error} = await q.range(off,off+999);
     if(error){ msg.textContent="Report failed — has patch_reporting.sql been run in Supabase? ("+error.message+")"; msg.className="msg err"; return; }
     lines=lines.concat(data);
     if(data.length<1000) break;
@@ -944,7 +972,7 @@ $("rpRun").onclick = async ()=>{
       <div style="width:90px;font-size:.78rem;font-variant-numeric:tabular-nums">€${eur(r.rev)}</div>
     </div>`).join("");
   $("rpChartWrap").style.display="block";
-  msg.textContent = rows.length+" groups, "+$("rpFrom").value+" to "+$("rpTo").value+".";
+  msg.textContent = rows.length+" groups, "+$("rpFrom").value+" to "+$("rpTo").value+(fNote.length?" — filtered: "+fNote.join(", "):"")+".";
 };
 $("rpCsv").onclick = ()=>{
   if(!rpLast) return;
