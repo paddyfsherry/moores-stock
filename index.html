@@ -260,6 +260,11 @@
         <thead><tr><th>Date</th><th>Type</th><th>From</th><th>To</th><th class="num">Qty</th><th class="num">Balance</th><th>Rotation</th><th>Ref</th></tr></thead>
         <tbody id="drillBody"></tbody>
       </table></div>
+      <h2 class="serif" style="font-size:1rem;margin:1.1rem 0 .4rem">Sales history <span class="dim" style="font-family:'Public Sans';font-size:.75rem" id="drillSalesCount"></span></h2>
+      <div class="wrap"><table>
+        <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="num">Qty</th><th>Unit</th><th class="num">Total €</th></tr></thead>
+        <tbody id="drillSales"></tbody>
+      </table></div>
     </div>
   </div>
 
@@ -619,6 +624,17 @@ function showPackPanel(){
 /* ==================== HISTORY ==================== */
 let histRows=[];
 async function loadHistory(){
+  $("drillSales").innerHTML = "<tr><td colspan=6 class='dim'>Loading…</td></tr>"; $("drillSalesCount").textContent="";
+  db.from("invoice_lines").select("qty,unit,line_total,invoice_id,invoices(invoice_date,customers(name))")
+    .eq("product_id",pid).limit(1000)
+    .then(({data:sl})=>{
+      sl=(sl||[]).sort((a,b)=>((b.invoices?.invoice_date||"")<(a.invoices?.invoice_date||"")?-1:1));
+      $("drillSalesCount").textContent = sl.length? "— "+sl.length+" invoice line"+(sl.length===1?"":"s")+(sl.length===1000?" (showing most recent 1,000)":""): "";
+      $("drillSales").innerHTML = sl.map(l=>`<tr><td class="dim">${l.invoices?.invoice_date||""}</td>
+        <td>${refCell("INV "+l.invoice_id)}</td><td>${esc(l.invoices?.customers?.name||"")}</td>
+        <td class="num">${l.qty}</td><td class="dim">${esc(l.unit)}</td><td class="num">${eur(l.line_total)}</td></tr>`).join("")
+        || "<tr><td colspan=6 class='dim'>Never sold on any invoice in the system.</td></tr>";
+    });
   const {data, error} = await db.from("stock_movements")
     .select("id,movement_date,movement_type,qty_bottles,rotation_number,reference,products(name),from_l:locations!stock_movements_from_location_id_fkey(name),to_l:locations!stock_movements_to_location_id_fkey(name)")
     .order("movement_date",{ascending:false}).order("id",{ascending:false}).limit(300);
