@@ -253,7 +253,8 @@
     <div style="background:var(--paper);max-width:900px;margin:4vh auto;max-height:92vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2 class="serif" id="drillTitle" style="font-size:1.15rem"></h2>
-        <button onclick="closeDrill()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+        <button id="drillPrintBtn" style="margin-left:auto;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print wine report</button>
+        <button onclick="closeDrill()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
       </div>
       <p class="hint" id="drillSub" style="margin:.2rem 0 .8rem"></p>
       <div class="wrap"><table>
@@ -342,6 +343,21 @@
         <div class="wrap"><table><thead><tr><th>Code</th><th>Description</th><th class="num">Cases</th></tr></thead>
         <tbody id="rcUnkBody"></tbody></table></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== REPORT DETAIL MODAL ========== -->
+  <div id="rpDetailWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.45);z-index:55" onclick="if(event.target===this)closeRpDetail()">
+    <div style="background:var(--paper);max-width:1000px;margin:4vh auto;max-height:92vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" id="rpDetailTitle" style="font-size:1.1rem"></h2>
+        <button onclick="closeRpDetail()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" id="rpDetailSub" style="margin:.2rem 0 .8rem"></p>
+      <div class="wrap"><table>
+        <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Wine</th><th class="num">Qty</th><th>Unit</th><th class="num">Total €</th></tr></thead>
+        <tbody id="rpDetailBody"></tbody>
+      </table></div>
     </div>
   </div>
 
@@ -676,6 +692,7 @@ $("prodShowOld").onchange = renderProducts;
 async function openDrill(pid){
   const p = products.find(x=>x.id===pid); if(!p) return;
   $("drillTitle").textContent = p.id+" — "+p.name;
+  $("drillPrintBtn").onclick = ()=>printWineReport(pid);
   $("drillSub").textContent = "Case of "+p.bottles_in_case+" × "+p.bottle_size_ml+"ml — every movement, oldest first, with running balance in bottles.";
   $("drillBody").innerHTML = "<tr><td colspan=8 class='dim'>Loading…</td></tr>";
   $("drillWrap").style.display="block";
@@ -1022,24 +1039,27 @@ $("rpRun").onclick = async ()=>{
     const ct={}; (window._rpCust||[]).forEach(c=>ct[c.id]=c.customer_type||"");
     lines = lines.filter(l=>(!regions.length||regions.includes(pt[l.product_id]||"")) && (!ctypes.length||ctypes.includes(ct[l.customer_id]||"")));
   }
+  function rpKeyOf(l){
+    if(grp==="month") return [l.invoice_date.slice(0,7), l.invoice_date.slice(0,7)];
+    if(grp==="wine") return ["p"+l.product_id, l.wine||"(non-stock line)"];
+    if(grp==="customer") return ["c"+l.customer_id, l.customer||("Customer "+l.customer_id)];
+    if(grp==="supplier") return ["s"+(l.supplier_id||0), supn[l.supplier_id]||"(no supplier)"];
+    if(grp==="ctype"){ const c=(window._rpCust||[]).find(c=>c.id===l.customer_id); const t=(c&&c.customer_type)?c.customer_type:"(unclassified)"; return ["y"+t,t]; }
+    const p=products.find(x=>x.id===l.product_id); const t=(p&&p.tags)?p.tags:"(untagged)"; return ["t"+t,t];
+  }
+  window._rpLines = lines; window._rpKeyOf = rpKeyOf;
   const agg={};
   for(const l of lines){
-    let key, label;
-    if(grp==="month"){ key=l.invoice_date.slice(0,7); label=key; }
-    else if(grp==="wine"){ key="p"+l.product_id; label=l.wine||"(non-stock line)"; }
-    else if(grp==="customer"){ key="c"+l.customer_id; label=l.customer||("Customer "+l.customer_id); }
-    else if(grp==="supplier"){ key="s"+(l.supplier_id||0); label=supn[l.supplier_id]||"(no supplier)"; }
-    else if(grp==="ctype"){ const c=(window._rpCust||[]).find(c=>c.id===l.customer_id); const t=(c&&c.customer_type)?c.customer_type:"(unclassified)"; key="y"+t; label=t; }
-    else { const p=products.find(x=>x.id===l.product_id); const t=(p&&p.tags)?p.tags:"(untagged)"; key="t"+t; label=t; }
-    const a = agg[key] = agg[key]||{label, invs:new Set(), bottles:0, rev:0, cost:0};
+    const [key,label] = rpKeyOf(l);
+    const a = agg[key] = agg[key]||{key, label, invs:new Set(), bottles:0, rev:0, cost:0};
     a.invs.add(l.invoice_id); a.bottles+=Number(l.bottles)||0; a.rev+=Number(l.line_total)||0; a.cost+=Number(l.est_cost)||0;
   }
-  let rows = Object.values(agg).map(a=>({label:a.label, n:a.invs.size, bottles:Math.round(a.bottles),
+  let rows = Object.values(agg).map(a=>({key:a.key, label:a.label, n:a.invs.size, bottles:Math.round(a.bottles),
     rev:a.rev, cost:a.cost, margin:a.rev-a.cost, pct:a.rev>0?100*(a.rev-a.cost)/a.rev:0}));
   rows.sort((x,y)=> grp==="month" ? (x.label<y.label?-1:1) : y.rev-x.rev);
   rpLast={rows, grp};
   $("rpCol0").textContent = {month:"Month",wine:"Wine",customer:"Customer",supplier:"Supplier",region:"Region",ctype:"Customer type"}[grp];
-  $("rpBody").innerHTML = rows.map(r=>`<tr><td>${esc(r.label)}</td><td class="num">${r.n}</td><td class="num">${r.bottles.toLocaleString()}</td>
+  $("rpBody").innerHTML = rows.map(r=>`<tr style="cursor:pointer" onclick="openRpDetail('${String(r.key).replace(/'/g,"\\'")}',this)" title="Click for the invoices behind this line"><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.label)}</td><td class="num">${r.n}</td><td class="num">${r.bottles.toLocaleString()}</td>
     <td class="num">${eur(r.rev)}</td><td class="num">${eur(r.cost)}</td>
     <td class="num${r.margin<0?" neg":""}">${eur(r.margin)}</td><td class="num${r.pct<0?" neg":""}">${r.pct.toFixed(1)}%</td></tr>`).join("");
   const tot=rows.reduce((s,r)=>({rev:s.rev+r.rev,cost:s.cost+r.cost,bottles:s.bottles+r.bottles}),{rev:0,cost:0,bottles:0});
@@ -1069,6 +1089,69 @@ $("rpCsv").onclick = ()=>{
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download="moores_report_"+rpLast.grp+".csv"; a.click();
 };
+
+/* ==================== REPORT DRILL-THROUGH ==================== */
+function openRpDetail(key, tr){
+  const lines = (window._rpLines||[]).filter(l=>window._rpKeyOf(l)[0]===key)
+    .sort((a,b)=>a.invoice_date<b.invoice_date?1:-1);
+  const label = tr ? tr.cells[0].textContent : key;
+  $("rpDetailTitle").textContent = label;
+  const rev = lines.reduce((s,l)=>s+(Number(l.line_total)||0),0);
+  const cap = lines.slice(0,800);
+  $("rpDetailSub").textContent = lines.length+" invoice line"+(lines.length===1?"":"s")+" · €"+eur(rev)+(lines.length>800?" · showing most recent 800":"");
+  $("rpDetailBody").innerHTML = cap.map(l=>`<tr><td class="dim">${l.invoice_date}</td>
+    <td>${refCell("INV "+l.invoice_id)}</td><td>${esc(l.customer||"")}</td><td>${esc(l.wine||"")}</td>
+    <td class="num">${l.qty}</td><td class="dim">${esc(l.unit)}</td><td class="num">${eur(l.line_total)}</td></tr>`).join("");
+  $("rpDetailWrap").style.display="block";
+}
+function closeRpDetail(){ $("rpDetailWrap").style.display="none"; }
+
+/* ==================== SINGLE-WINE PRINTED REPORT ==================== */
+async function printWineReport(pid){
+  const p = products.find(x=>x.id===pid); if(!p) return;
+  const [{data:sl},{data:st}] = await Promise.all([
+    db.from("v_report_lines").select("invoice_date,customer,qty,unit,line_total,bottles,est_cost").eq("product_id",pid).limit(10000),
+    db.from("v_stock_valuation").select("*").eq("product_id",pid),
+  ]);
+  const lines = sl||[];
+  const byYear={}, byCust={};
+  lines.forEach(l=>{
+    const y=l.invoice_date.slice(0,4);
+    (byYear[y]=byYear[y]||{b:0,r:0,c:0}); byYear[y].b+=Number(l.bottles)||0; byYear[y].r+=Number(l.line_total)||0; byYear[y].c+=Number(l.est_cost)||0;
+    const cu=l.customer||"(unknown)";
+    (byCust[cu]=byCust[cu]||{b:0,r:0}); byCust[cu].b+=Number(l.bottles)||0; byCust[cu].r+=Number(l.line_total)||0;
+  });
+  const years = Object.keys(byYear).sort().reverse();
+  const custs = Object.entries(byCust).sort((a,b)=>b[1].r-a[1].r).slice(0,15);
+  const stock = (st||[]).map(s=>`<tr><td>${esc(s.location)}</td><td>${s.duty_status==="under_bond"?"Under bond":"Duty paid"}</td><td class="r">${s.cases}</td><td class="r">${s.qty_bottles}</td><td class="r">€${eur(s.total_value)}</td></tr>`).join("") || "<tr><td colspan=5>No stock on hand</td></tr>";
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(p.name)}</title><style>
+    body{font-family:Georgia,serif;color:#222;margin:2cm;font-size:10.5pt}
+    h1{font-size:17pt;color:#5C1A2E;margin:0}
+    .sub{color:#777;font-size:9.5pt;margin:.2em 0 1.2em}
+    h2{font-size:11.5pt;color:#5C1A2E;margin:1.4em 0 .4em;border-bottom:1.5px solid #5C1A2E;padding-bottom:.15em}
+    table{width:100%;border-collapse:collapse;font-size:9.5pt}
+    th{font-size:8pt;text-transform:uppercase;letter-spacing:.05em;color:#666;text-align:left;padding:.3em .4em;border-bottom:1px solid #999}
+    td{padding:.3em .4em;border-bottom:1px solid #eee}
+    .r{text-align:right;font-variant-numeric:tabular-nums}
+    .foot{margin-top:2.5em;font-size:8pt;color:#999;font-style:italic}
+  </style></head><body>
+  <h1>${p.id} — ${esc(p.name)}</h1>
+  <div class="sub">${esc(tagOf(p))} · case of ${p.bottles_in_case} × ${p.bottle_size_ml}ml · case cost €${eur(p.case_cost)} · list €${eur(p.case_price)}</div>
+  <h2>Stock on hand</h2>
+  <table><thead><tr><th>Location</th><th>Status</th><th class="r">Cases</th><th class="r">Bottles</th><th class="r">Value</th></tr></thead><tbody>${stock}</tbody></table>
+  <h2>Sales by year</h2>
+  <table><thead><tr><th>Year</th><th class="r">Bottles</th><th class="r">Revenue €</th><th class="r">Est. margin €</th></tr></thead><tbody>
+  ${years.map(y=>`<tr><td>${y}</td><td class="r">${Math.round(byYear[y].b).toLocaleString()}</td><td class="r">${eur(byYear[y].r)}</td><td class="r">${eur(byYear[y].r-byYear[y].c)}</td></tr>`).join("")}
+  </tbody></table>
+  <h2>Top customers (all time)</h2>
+  <table><thead><tr><th>Customer</th><th class="r">Bottles</th><th class="r">Revenue €</th></tr></thead><tbody>
+  ${custs.map(([n,v])=>`<tr><td>${esc(n)}</td><td class="r">${Math.round(v.b).toLocaleString()}</td><td class="r">${eur(v.r)}</td></tr>`).join("")}
+  </tbody></table>
+  <div class="foot">Moores' Wines Stock Book — wine report printed ${new Date().toISOString().slice(0,10)} · margin at current case cost · internal use</div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
 
 init();
 </script>
