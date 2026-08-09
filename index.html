@@ -116,6 +116,7 @@
 <nav id="mainNav" style="display:none">
   <button data-view="stock" class="active">Stock on hand</button>
   <button data-view="move">Record a movement</button>
+  <button data-view="newinv">New invoice</button>
   <button data-view="history">Movement history</button>
   <button data-view="products">Wine list</button>
   <button data-view="packs">Gift packs</button>
@@ -208,6 +209,36 @@
       </div>
       <button class="btn" id="btnSaveMove">Save movement</button>
       <div class="msg" id="mvMsg"></div>
+    </div>
+  </div>
+
+  <!-- ========== NEW INVOICE (DRAFT) ========== -->
+  <div id="viewNewInv" class="view" style="display:none">
+    <div class="panel">
+      <h2>New invoice <span class="tag bond" style="vertical-align:middle">DRAFT MODE</span></h2>
+      <p class="hint">Drafts use temporary numbers (900001+) and never touch stock — Catherine's Access numbering stays in charge until cutover. Print carries a DRAFT banner.</p>
+      <div class="grid3">
+        <div><label for="niCust">Customer</label><input id="niCust" list="rpCustList" placeholder="start typing…" autocomplete="off"></div>
+        <div><label for="niDate">Date</label><input id="niDate" type="date"></div>
+        <div><label for="niVat">VAT %</label><input id="niVat" type="number" step="0.1" value="23"></div>
+      </div>
+      <div class="chosen" id="niCustInfo"></div>
+      <label>Lines</label>
+      <div id="niLines"></div>
+      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="niAddLine">+ add line</button>
+      <div class="grid2" style="margin-top:.6rem">
+        <div><label for="niComment">Delivery comment <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="niComment"></div>
+        <div style="text-align:right;align-self:end">
+          <div style="font-family:'Libre Caslon Text',serif;font-size:1.05rem" id="niTotals">Net €0.00 · VAT €0.00 · <strong>Total €0.00</strong></div>
+        </div>
+      </div>
+      <button class="btn" id="niSave">Save draft</button>
+      <div class="msg" id="niMsg"></div>
+    </div>
+    <div class="panel">
+      <h2>Draft invoices</h2>
+      <div class="wrap"><table><thead><tr><th>Draft no.</th><th>Date</th><th>Customer</th><th class="num">Total €</th><th></th></tr></thead>
+      <tbody id="niDrafts"></tbody></table></div>
     </div>
   </div>
 
@@ -434,7 +465,7 @@ function showLogin(){
   $("viewLogin").style.display="block";
   $("mainNav").style.display="none";
   $("whoBox").style.display="none";
-  ["viewStock","viewMove","viewHistory","viewProducts","viewPacks","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
+  ["viewStock","viewMove","viewNewInv","viewHistory","viewProducts","viewPacks","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
 }
 async function enter(session){
   $("viewLogin").style.display="none";
@@ -481,6 +512,8 @@ function switchView(v){
   document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
   $("viewStock").style.display   = v==="stock"?"block":"none";
   $("viewMove").style.display    = v==="move"?"block":"none";
+  $("viewNewInv").style.display  = v==="newinv"?"block":"none";
+  if(v==="newinv") initNewInv();
   $("viewHistory").style.display = v==="history"?"block":"none";
   $("viewProducts").style.display= v==="products"?"block":"none";
   $("viewPacks").style.display   = v==="packs"?"block":"none";
@@ -795,7 +828,7 @@ function refCell(ref){
   return `<a href="#" onclick="event.preventDefault();event.stopPropagation();openInvoice(${m[1]})" style="color:var(--claret)">${esc(ref)}</a>`;
 }
 async function openInvoice(id){
-  $("invTitle").textContent = "Invoice "+id;
+  $("invTitle").textContent = (id>=900000?"DRAFT ":"Invoice ")+id;
   $("invMeta").textContent = "Loading…";
   $("invBody").innerHTML=""; $("invTotals").textContent="";
   $("invWrap").style.display="block";
@@ -838,6 +871,7 @@ function printInvoice(){
     .tot strong{font-size:13pt}
     .foot{margin-top:3em;font-size:8pt;color:#999;font-style:italic;border-top:1px solid #e5ddd2;padding-top:.6em}
   </style></head><body>
+  ${inv.status==="draft"?"<div style='border:2px dashed #A03030;color:#A03030;text-align:center;font-size:13pt;letter-spacing:.25em;padding:.3em;margin-bottom:1em'>DRAFT — NOT ISSUED</div>":""}
   <div class="head"><h1>Moores&rsquo; Wines</h1>
     <div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
   <div class="meta">
@@ -972,13 +1006,17 @@ function chipPicker(inpId, chipsId, resolve){
   return st;
 }
 let pkWine=null, pkCust=null, pkRegion=null, pkType=null;
+async function ensureCustomers(){
+  if(window._rpCust) return;
+  window._rpCust = await fetchAll("customers","id,name,customer_type,discount_pct,diplomat","name");
+  $("rpCustList").innerHTML = window._rpCust.map(c=>`<option value="${esc(c.name)}">`).join("");
+}
 
 async function rpDefaults(){
   const today=new Date().toISOString().slice(0,10);
   $("rpFrom").value="1997-02-01"; $("rpTo").value=today;
   $("rpWineList").innerHTML = products.map(p=>`<option value="${p.id} — ${esc(p.name)}">`).join("");
-  window._rpCust = await fetchAll("customers","id,name,customer_type","name");
-  $("rpCustList").innerHTML = window._rpCust.map(c=>`<option value="${esc(c.name)}">`).join("");
+  await ensureCustomers();
   const tags=[...new Set(products.map(p=>p.tags).filter(t=>t))].sort();
   $("rpRegionList").innerHTML = tags.map(t=>`<option value="${esc(t)}">`).join("");
   const types=[...new Set(window._rpCust.map(c=>c.customer_type).filter(t=>t))].sort();
@@ -1151,6 +1189,132 @@ async function printWineReport(pid){
   <div class="foot">Moores' Wines Stock Book — wine report printed ${new Date().toISOString().slice(0,10)} · margin at current case cost · internal use</div>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
+}
+
+/* ==================== NEW INVOICE (DRAFT) ==================== */
+let niCustomer=null, niInited=false;
+async function initNewInv(){
+  await ensureCustomers();
+  if(niInited){ renderDrafts(); return; }
+  niInited=true;
+  $("niDate").value = new Date().toISOString().slice(0,10);
+  $("niCust").addEventListener("change", ()=>{
+    const v=$("niCust").value.trim().toLowerCase();
+    niCustomer = (window._rpCust||[]).find(c=>c.name.toLowerCase()===v)||null;
+    if(niCustomer){
+      $("niCustInfo").textContent = "Selected: "+niCustomer.name+
+        (niCustomer.discount_pct>0?" — discount "+niCustomer.discount_pct+"% applied to prices":"")+
+        (niCustomer.diplomat?" — DIPLOMAT: VAT set to 0":"");
+      $("niCustInfo").style.display="block";
+      if(niCustomer.diplomat) $("niVat").value=0;
+      niRefreshPrices();
+    }
+  });
+  $("niAddLine").onclick = ()=>{ addNiLine(); };
+  addNiLine();
+  $("niSave").onclick = saveDraft;
+  renderDrafts();
+}
+function addNiLine(){
+  const i = Date.now()+Math.random();
+  $("niLines").insertAdjacentHTML("beforeend", `
+  <div style="display:grid;grid-template-columns:3fr 70px 100px 110px 110px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-ni="${i}">
+    <div><div class="picker"><input class="niProd" placeholder="wine — type code or name…" autocomplete="off"><ul style="display:none"></ul></div></div>
+    <div><label>Qty</label><input class="niQty" type="number" min="0" step="1" value="1"></div>
+    <div><label>Unit</label><select class="niUnit"><option>Case</option><option>Bottle</option></select></div>
+    <div><label>Price €</label><input class="niPrice" type="number" min="0" step="0.01" value="0"></div>
+    <div><label>Total €</label><input class="niTot" disabled value="0.00" style="background:var(--paper)"></div>
+    <button onclick="this.closest('[data-ni]').remove();niTotals()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">✕</button>
+  </div>`);
+  const div = $("niLines").lastElementChild;
+  const inp=div.querySelector(".niProd"), ul=inp.nextElementSibling;
+  inp.oninput=()=>{
+    inp.dataset.pid="";
+    const q=inp.value.trim().toLowerCase();
+    if(q.length<2){ul.style.display="none";return;}
+    const hits=products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,10);
+    ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${p.id} — ${esc(p.name)} <span class="cs">(€${eur(p.case_price)}/case)</span></li>`).join("")||"<li class='dim'>No match</li>";
+    ul.style.display="block";
+    ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+      const p=products.find(x=>x.id==li.dataset.id);
+      inp.value=p.id+" — "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      setLinePrice(div,p); niLineTotal(div);
+    });
+  };
+  div.querySelector(".niQty").oninput=()=>niLineTotal(div);
+  div.querySelector(".niPrice").oninput=()=>niLineTotal(div);
+  div.querySelector(".niUnit").onchange=()=>{
+    const p=products.find(x=>x.id==+inp.dataset.pid); if(p) setLinePrice(div,p);
+    niLineTotal(div);
+  };
+}
+function setLinePrice(div,p){
+  const disc = niCustomer&&niCustomer.discount_pct>0 ? (1-niCustomer.discount_pct/100) : 1;
+  const unit = div.querySelector(".niUnit").value;
+  const base = unit==="Case" ? p.case_price : p.case_price/p.bottles_in_case;
+  div.querySelector(".niPrice").value = (base*disc).toFixed(2);
+}
+function niRefreshPrices(){
+  document.querySelectorAll("#niLines [data-ni]").forEach(div=>{
+    const p=products.find(x=>x.id==+div.querySelector(".niProd").dataset.pid);
+    if(p){ setLinePrice(div,p); niLineTotal(div); }
+  });
+}
+function niLineTotal(div){
+  const q=+div.querySelector(".niQty").value||0, pr=+div.querySelector(".niPrice").value||0;
+  div.querySelector(".niTot").value=(q*pr).toFixed(2);
+  niTotals();
+}
+function niTotals(){
+  let net=0;
+  document.querySelectorAll("#niLines .niTot").forEach(t=>net+=+t.value||0);
+  const vat = net*(+$("niVat").value||0)/100;
+  $("niTotals").innerHTML = "Net €"+eur(net)+" · VAT €"+eur(vat)+" · <strong>Total €"+eur(net+vat)+"</strong>";
+  return {net,vat};
+}
+async function saveDraft(){
+  const m=$("niMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  if(!niCustomer) return fail("Pick a customer from the list first.");
+  const lines=[...document.querySelectorAll("#niLines [data-ni]")].map(div=>({
+    pid:+div.querySelector(".niProd").dataset.pid||null,
+    desc:div.querySelector(".niProd").value.replace(/^\d+ — /,""),
+    qty:+div.querySelector(".niQty").value||0,
+    unit:div.querySelector(".niUnit").value,
+    price:+div.querySelector(".niPrice").value||0,
+    tot:+div.querySelector(".niTot").value||0,
+  })).filter(l=>l.pid&&l.qty>0);
+  if(!lines.length) return fail("Add at least one line with a wine and quantity.");
+  const {net,vat}=niTotals();
+  $("niSave").disabled=true;
+  const {data:mx} = await db.from("invoices").select("id").gte("id",900000).order("id",{ascending:false}).limit(1);
+  const nid = (mx&&mx.length?mx[0].id:900000)+1;
+  const {error:e1} = await db.from("invoices").insert({id:nid, customer_id:niCustomer.id,
+    invoice_date:$("niDate").value, discount:0, net_total:net, vat:vat, gross_total:net+vat,
+    cust_order_no:"", delivery_comment:$("niComment").value.trim(), status:"draft"});
+  if(e1){ $("niSave").disabled=false; return fail("Not saved — "+e1.message+" (has patch_invoicing.sql been run?)"); }
+  const {error:e2} = await db.from("invoice_lines").insert(lines.map(l=>({invoice_id:nid, product_id:l.pid,
+    description:l.desc, qty:l.qty, unit:l.unit, case_price:l.price, line_total:l.tot, rotation_number:""})));
+  $("niSave").disabled=false;
+  if(e2) return fail("Header saved but lines failed — "+e2.message);
+  m.textContent="Draft "+nid+" saved."; m.className="msg ok";
+  $("niLines").innerHTML=""; addNiLine(); $("niComment").value=""; niTotals();
+  renderDrafts();
+}
+async function renderDrafts(){
+  const {data} = await db.from("invoices").select("id,invoice_date,gross_total,customers(name)")
+    .eq("status","draft").order("id",{ascending:false}).limit(50);
+  $("niDrafts").innerHTML = (data||[]).map(d=>`<tr>
+    <td><a href="#" onclick="event.preventDefault();openInvoice(${d.id})" style="color:var(--claret)">DRAFT ${d.id}</a></td>
+    <td class="dim">${d.invoice_date}</td><td>${esc(d.customers?.name||"")}</td>
+    <td class="num">${eur(d.gross_total)}</td>
+    <td><button onclick="delDraft(${d.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Delete</button></td></tr>`).join("")
+    || "<tr><td colspan=5 class='dim'>No drafts yet.</td></tr>";
+}
+async function delDraft(id){
+  if(!confirm("Delete draft "+id+"?")) return;
+  await db.from("invoices").delete().eq("id",id).eq("status","draft");
+  renderDrafts();
 }
 
 init();
