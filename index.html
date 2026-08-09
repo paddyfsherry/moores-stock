@@ -625,13 +625,14 @@ function showPackPanel(){
 let histRows=[];
 async function loadHistory(){
   $("drillSales").innerHTML = "<tr><td colspan=6 class='dim'>Loading…</td></tr>"; $("drillSalesCount").textContent="";
-  db.from("invoice_lines").select("qty,unit,line_total,invoice_id,invoices(invoice_date,customers(name))")
-    .eq("product_id",pid).limit(1000)
-    .then(({data:sl})=>{
-      sl=(sl||[]).sort((a,b)=>((b.invoices?.invoice_date||"")<(a.invoices?.invoice_date||"")?-1:1));
-      $("drillSalesCount").textContent = sl.length? "— "+sl.length+" invoice line"+(sl.length===1?"":"s")+(sl.length===1000?" (showing most recent 1,000)":""): "";
-      $("drillSales").innerHTML = sl.map(l=>`<tr><td class="dim">${l.invoices?.invoice_date||""}</td>
-        <td>${refCell("INV "+l.invoice_id)}</td><td>${esc(l.invoices?.customers?.name||"")}</td>
+  db.from("v_report_lines").select("invoice_id,invoice_date,customer,qty,unit,line_total")
+    .eq("product_id",pid).order("invoice_date",{ascending:false}).limit(1000)
+    .then(({data:sl, error:se})=>{
+      if(se){ $("drillSales").innerHTML = "<tr><td colspan=6 class='dim'>Sales lookup failed: "+esc(se.message)+"</td></tr>"; return; }
+      sl = sl||[];
+      $("drillSalesCount").textContent = sl.length? "— "+sl.length+" invoice line"+(sl.length===1?"":"s")+(sl.length===1000?" (most recent 1,000)":""): "";
+      $("drillSales").innerHTML = sl.map(l=>`<tr><td class="dim">${l.invoice_date||""}</td>
+        <td>${refCell("INV "+l.invoice_id)}</td><td>${esc(l.customer||"")}</td>
         <td class="num">${l.qty}</td><td class="dim">${esc(l.unit)}</td><td class="num">${eur(l.line_total)}</td></tr>`).join("")
         || "<tr><td colspan=6 class='dim'>Never sold on any invoice in the system.</td></tr>";
     });
