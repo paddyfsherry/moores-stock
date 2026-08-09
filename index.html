@@ -151,7 +151,7 @@
     </div>
     <div class="wrap"><table id="stockTable">
       <thead><tr>
-        <th>Code</th><th>Wine</th><th>Case</th><th>Location</th><th>Status</th>
+        <th>Code</th><th>Wine</th><th>Region</th><th>Case</th><th>Location</th><th>Status</th>
         <th class="num">Cases</th><th class="num">Bottles</th>
         <th class="num">Cost €</th><th class="num">Duty €</th><th class="num">Value €</th>
       </tr></thead>
@@ -487,7 +487,7 @@ async function loadStock(){
 function renderStock(){
   const q = $("stockSearch").value.trim().toLowerCase();
   const lf = $("stockLoc").value;
-  const pmapT={}; products.forEach(p=>pmapT[p.id]=(p.tags||"").toLowerCase());
+  const pmapT={}; products.forEach(p=>pmapT[p.id]=tagOf(p).toLowerCase());
   const rows = stockRows.filter(r=>(!q || r.product.toLowerCase().includes(q) || String(r.product_id).includes(q) || (pmapT[r.product_id]||"").includes(q)) && (!lf || String(r.location_id)===lf));
   let ub=0, dp=0;
   stockRows.forEach(r=>{ r.duty_status==="under_bond" ? ub+=Number(r.total_value) : dp+=Number(r.total_value); });
@@ -500,7 +500,7 @@ function renderStock(){
     const tag = r.duty_status==="under_bond" ? '<span class="tag bond">Under bond</span>' : '<span class="tag dp">Duty paid</span>';
     const p = products.find(p=>p.id===r.product_id);
     const caseTxt = p ? p.bottles_in_case+"×"+p.bottle_size_ml+"ml" : "";
-    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td class="dim">${r.product_id}</td><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${caseTxt}</td>
+    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td class="dim">${r.product_id}</td><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${esc(tagOf(p))}</td><td class="dim">${caseTxt}</td>
       <td>${esc(r.location)}</td><td>${tag}</td>
       <td${negC}>${r.cases}</td><td${negC}>${r.qty_bottles}</td>
       <td class="num">${eur(r.cost_value)}</td><td class="num">${eur(r.duty_value)}</td><td class="num"><strong>${eur(r.total_value)}</strong></td></tr>`;
@@ -659,14 +659,14 @@ $("histSearch").oninput = renderHistory;
 function renderProducts(){
   const q=$("prodSearch").value.trim().toLowerCase();
   const showOld=$("prodShowOld").checked;
-  const rows = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q)||String(p.id).includes(q)||(p.tags||"").toLowerCase().includes(q))).slice(0,400);
+  const rows = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q)||String(p.id).includes(q)||tagOf(p).toLowerCase().includes(q))).slice(0,400);
   $("prodBody").innerHTML = rows.map(p=>{
     const duty = dutyCats[p.duty_category_id]?.duty_per_case;
-    return `<tr${p.obsolete?' style="opacity:.55"':''}><td class="dim">${p.id}</td><td style="cursor:pointer;color:var(--claret);text-decoration:underline dotted" onclick="openDrill(${p.id})">${esc(p.name)}</td><td class="dim">${esc(p.tags||'')}</td>
+    return `<tr${p.obsolete?' style="opacity:.55"':''}><td class="dim">${p.id}</td><td style="cursor:pointer;color:var(--claret);text-decoration:underline dotted" onclick="openDrill(${p.id})">${esc(p.name)}</td><td class="dim">${esc(tagOf(p))}</td>
       <td class="num">${p.bottles_in_case}</td><td class="num">${p.bottle_size_ml}</td>
       <td class="num">${eur(p.case_cost)}</td><td class="num">${eur(duty)}</td><td class="num">${eur(p.case_price)}</td></tr>`;
   }).join("");
-  const total = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q)||String(p.id).includes(q)||(p.tags||"").toLowerCase().includes(q))).length;
+  const total = products.filter(p=>(showOld||!p.obsolete)&&(!q||p.name.toLowerCase().includes(q)||String(p.id).includes(q)||tagOf(p).toLowerCase().includes(q))).length;
   $("prodCount").textContent = total>400 ? "showing 400 of "+total : total+" wines";
 }
 $("prodSearch").oninput = renderProducts;
@@ -699,6 +699,17 @@ async function openDrill(pid){
 function closeDrill(){ $("drillWrap").style.display="none"; }
 
 /* ==================== GIFT PACKS ==================== */
+
+function tagOf(p){
+  if(!p) return "";
+  const comps = packOf(p.id);
+  if(comps.length){
+    const regs = [...new Set(comps.map(c=>{const cp=products.find(x=>x.id===c.component_id);return cp&&cp.tags?cp.tags:null;}).filter(Boolean))];
+    return regs.length ? "Gift: "+regs.join(", ") : (p.tags||"");
+  }
+  return p.tags||"";
+}
+
 function packOf(pid){ return components.filter(c=>c.pack_id===pid); }
 function pkLineHtml(i){
   return `<div class="grid2" style="align-items:end" data-pk="${i}">
