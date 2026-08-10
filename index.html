@@ -50,7 +50,7 @@
 
   /* ---------- Forms ---------- */
   label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);margin:.7rem 0 .25rem;text-transform:uppercase;letter-spacing:.04em}
-  input,select{width:100%;padding:.55rem .6rem;border:1px solid var(--line);border-radius:5px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
+  input,select,textarea{width:100%;padding:.55rem .6rem;border:1px solid var(--line);border-radius:5px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
   .btn{display:inline-block;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.6rem 1.2rem;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:1rem}
   .btn:hover{background:var(--claret-dark)}
   .btn[disabled]{opacity:.5;cursor:default}
@@ -126,6 +126,12 @@
   <button data-sub="recon" onclick="showStockSub('recon')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Reconcile</button>
 </div>
 <style>#stockSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
+<div id="salesSub" style="display:none;background:var(--paper);padding:.5rem 1.2rem;gap:.4rem;border-bottom:1px solid var(--line)">
+  <button data-ssub="inv" class="active" onclick="showSalesSub('inv')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Invoices</button>
+  <button data-ssub="lists" onclick="showSalesSub('lists')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Wine lists</button>
+  <button data-ssub="dn" onclick="showSalesSub('dn')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Delivery notes</button>
+</div>
+<style>#salesSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
 
 <main id="appMain">
 
@@ -276,6 +282,68 @@
       <h2>Draft invoices</h2>
       <div class="wrap"><table><thead><tr><th>Draft no.</th><th>Date</th><th>Customer</th><th class="num">Total €</th><th></th></tr></thead>
       <tbody id="niDrafts"></tbody></table></div>
+    </div>
+  </div>
+
+
+  <!-- ========== WINE LISTS ========== -->
+  <div id="viewWineLists" class="view" style="display:none">
+    <div class="panel">
+      <h2>Wine list generator</h2>
+      <p class="hint">Build a printable price list straight from the wine list &mdash; duty-paid or in-bond (list price less duty), with a customer&rsquo;s discount applied if you pick one. Save any set-up as a template so it can be reprinted in two clicks, always with today&rsquo;s prices and stock.</p>
+      <div class="grid3">
+        <div><label for="wlTemplate">Template</label><select id="wlTemplate"><option value="">&mdash; new list from scratch &mdash;</option></select></div>
+        <div><label for="wlTitle">List title</label><input id="wlTitle" value="Wine List"></div>
+        <div><label for="wlBasis">Price basis</label><select id="wlBasis">
+          <option value="dp">Duty paid</option>
+          <option value="ib">In bond</option>
+          <option value="both">Both (two columns)</option>
+        </select></div>
+      </div>
+      <div class="grid2">
+        <div><label for="wlCust">Customer pricing <span style="text-transform:none;font-weight:400">(optional &mdash; applies their discount)</span></label>
+          <input id="wlCust" list="rpCustList" placeholder="start typing a customer&hellip;" autocomplete="off">
+          <div class="chosen" id="wlCustInfo"></div></div>
+        <div><label for="wlRegion">Regions <span style="text-transform:none;font-weight:400">(optional &mdash; pick one or several)</span></label>
+          <input id="wlRegion" list="wlRegionList" placeholder="e.g. Bordeaux, pick, repeat&hellip;"><datalist id="wlRegionList"></datalist>
+          <div id="wlRegionChips" style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.35rem"></div></div>
+      </div>
+      <div style="display:flex;gap:1.4rem;flex-wrap:wrap;margin-top:.8rem">
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlStock" checked style="width:auto"> in-stock wines only</label>
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlBottle" checked style="width:auto"> show per-bottle price</label>
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlBios" style="width:auto"> include producer bios</label>
+      </div>
+      <button class="btn" id="wlRun">Preview &amp; print</button>
+      <button class="btn" id="wlSaveTpl" style="background:#7A6E63">Save as template</button>
+      <button class="btn" id="wlDelTpl" style="background:none;color:var(--neg);border:1px solid var(--line);display:none">Delete template</button>
+      <div class="msg" id="wlMsg"></div>
+    </div>
+  </div>
+
+  <!-- ========== DELIVERY NOTES ========== -->
+  <div id="viewDelNotes" class="view" style="display:none">
+    <div class="panel">
+      <h2>New delivery note</h2>
+      <p class="hint">A courier docket &mdash; no prices, no effect on stock. This replaces the GIFT BOX (3005) workaround. Print two copies: one travels, one comes back signed.</p>
+      <div class="grid3">
+        <div><label for="dnCust">Customer</label><input id="dnCust" list="rpCustList" placeholder="start typing&hellip;" autocomplete="off"></div>
+        <div><label for="dnDate">Date</label><input id="dnDate" type="date"></div>
+        <div><label for="dnRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="dnRef" placeholder="order no. / invoice no."></div>
+      </div>
+      <label for="dnAddr">Deliver to <span style="text-transform:none;font-weight:400">(fills in from the customer &mdash; edit freely)</span></label>
+      <textarea id="dnAddr" rows="4"></textarea>
+      <label>Goods</label>
+      <div id="dnLines"></div>
+      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="dnAddLine">+ add line</button>
+      <label for="dnComment">Delivery instructions <span style="text-transform:none;font-weight:400">(optional)</span></label>
+      <input id="dnComment" placeholder="e.g. leave with reception, call on arrival">
+      <button class="btn" id="dnSave">Save &amp; print</button>
+      <div class="msg" id="dnMsg"></div>
+    </div>
+    <div class="panel">
+      <h2>Recent delivery notes</h2>
+      <div class="wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Reference</th><th class="num">Lines</th><th></th></tr></thead>
+      <tbody id="dnList"></tbody></table></div>
     </div>
   </div>
 
@@ -466,7 +534,8 @@
         <input type="checkbox" id="prodShowOld" style="width:auto"> show obsolete
       </label>
       <span class="count" id="prodCount"></span>
-      <button class="btn" style="margin:0 0 0 .5rem" onclick="openNp()">＋ New product</button>
+      <button class="btn" style="margin:0 0 0 .5rem;background:#7A6E63" onclick="openSup()">Suppliers &amp; bios</button>
+      <button class="btn" style="margin:0" onclick="openNp()">＋ New product</button>
     </div>
     <div class="wrap"><table>
       <thead><tr>
@@ -475,6 +544,20 @@
       </tr></thead>
       <tbody id="prodBody"></tbody>
     </table></div>
+  </div>
+
+  <!-- ========== SUPPLIERS & BIOS MODAL ========== -->
+  <div id="supWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.45);z-index:50;overflow-y:auto" onclick="if(event.target===this)closeSup()">
+    <div style="background:var(--paper);max-width:760px;margin:4vh auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" style="font-size:1.1rem">Suppliers &amp; producer bios</h2>
+        <button onclick="closeSup()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .6rem">A short paragraph on each producer. Bios print on wine lists when &ldquo;include producer bios&rdquo; is ticked.</p>
+      <input type="search" id="supSearch" placeholder="Search suppliers&hellip;">
+      <div class="msg" id="supMsg"></div>
+      <div id="supBody" style="margin-top:.8rem"></div>
+    </div>
   </div>
 
 </main>
@@ -515,8 +598,9 @@ function showLogin(){
   $("viewLogin").style.display="block";
   $("mainNav").style.display="none";
   $("whoBox").style.display="none";
-  ["viewCockpit","viewStock","viewMove","viewNewInv","viewHistory","viewProducts","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
+  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
   $("stockSub").style.display="none";
+  $("salesSub").style.display="none";
 }
 async function enter(session){
   $("viewLogin").style.display="none";
@@ -542,7 +626,7 @@ async function loadRefData(){
   const [locs, cats, prods, comps] = await Promise.all([
     fetchAll("locations","id,name,duty_status","id"),
     fetchAll("duty_categories","id,name,duty_per_case","id"),
-    fetchAll("products","id,name,bottles_in_case,bottle_size_ml,case_cost,case_price,duty_category_id,obsolete,tags","name"),
+    fetchAll("products","id,name,supplier_id,bottles_in_case,bottle_size_ml,case_cost,case_price,duty_category_id,obsolete,tags","name"),
     fetchAll("product_components","id,pack_id,component_id,qty_bottles").catch(()=>[]),
   ]);
   locations = locs;
@@ -562,10 +646,11 @@ async function loadRefData(){
 document.querySelectorAll("#mainNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 function switchView(v){
   document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  ["viewCockpit","viewStock","viewMove","viewNewInv","viewHistory","viewProducts","viewRecon","viewReports"].forEach(x=>$(x).style.display="none");
+  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports"].forEach(x=>$(x).style.display="none");
   $("stockSub").style.display = v==="stock" ? "flex":"none";
+  $("salesSub").style.display = v==="newinv" ? "flex":"none";
   if(v==="cockpit"){ $("viewCockpit").style.display="block"; loadCockpit(); }
-  if(v==="newinv"){ $("viewNewInv").style.display="block"; initNewInv(); }
+  if(v==="newinv") showSalesSub(window._salesSub||"inv");
   if(v==="products"){ $("viewProducts").style.display="block"; renderProducts(); }
   if(v==="reports"){ $("viewReports").style.display="block"; if(!window._rpInit){window._rpInit=1; rpDefaults();} }
   if(v==="stock") showStockSub(window._stockSub||"onhand");
@@ -1094,7 +1179,7 @@ function chipPicker(inpId, chipsId, resolve){
 let pkWine=null, pkCust=null, pkRegion=null, pkType=null;
 async function ensureCustomers(){
   if(window._rpCust) return;
-  window._rpCust = await fetchAll("customers","id,name,customer_type,discount_pct,diplomat","name");
+  window._rpCust = await fetchAll("customers","id,name,customer_type,discount_pct,diplomat,address1,address2,address3,address4,eircode","name");
   $("rpCustList").innerHTML = window._rpCust.map(c=>`<option value="${esc(c.name)}">`).join("");
 }
 
@@ -1475,6 +1560,376 @@ function renderCockpit(){
 }
 $("ckSearch").oninput=renderCockpit;
 document.querySelectorAll("#ckHead th").forEach(th=>th.onclick=()=>ckSortBy(th.dataset.k));
+
+
+/* ==================== SALES SUB-TABS ==================== */
+function showSalesSub(s){
+  window._salesSub=s;
+  document.querySelectorAll("#salesSub button").forEach(b=>b.classList.toggle("active",b.dataset.ssub===s));
+  $("viewNewInv").style.display   = s==="inv"  ?"block":"none";
+  $("viewWineLists").style.display= s==="lists"?"block":"none";
+  $("viewDelNotes").style.display = s==="dn"   ?"block":"none";
+  if(s==="inv") initNewInv();
+  if(s==="lists") wlInit();
+  if(s==="dn") dnInit();
+}
+
+/* ==================== SUPPLIERS & BIOS ==================== */
+async function ensureSuppliers(){
+  if(window._supAll) return;
+  try{ window._supAll = await fetchAll("suppliers","id,name,bio","name"); window._supNoBio=false; }
+  catch(e){
+    window._supAll = await fetchAll("suppliers","id,name","name").catch(()=>[]);
+    window._supNoBio=true;
+  }
+}
+async function openSup(){
+  await ensureSuppliers();
+  $("supWrap").style.display="block";
+  const m=$("supMsg"); m.className="msg";
+  if(window._supNoBio){ m.textContent="Bios need the bundle_a.sql patch — run it in Supabase, then reopen this window."; m.className="msg err"; }
+  renderSup();
+}
+function closeSup(){ $("supWrap").style.display="none"; }
+function renderSup(){
+  const q=($("supSearch").value||"").trim().toLowerCase();
+  const rows=(window._supAll||[]).filter(s=>!q||s.name.toLowerCase().includes(q)).slice(0,60);
+  $("supBody").innerHTML = rows.map(s=>`
+    <div style="border:1px solid var(--line);border-radius:8px;background:var(--card);padding:.7rem .9rem;margin-bottom:.6rem" data-sup="${s.id}">
+      <div style="display:flex;align-items:baseline;gap:.8rem">
+        <strong class="serif">${esc(s.name)}</strong>
+        <span class="dim" style="font-size:.75rem">${s.bio?"":"no bio yet"}</span>
+        <button class="supSave" style="margin-left:auto;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.25rem .8rem;cursor:pointer;font-size:.8rem">Save</button>
+      </div>
+      <textarea class="supBio" rows="2" placeholder="A sentence or two about the producer&hellip;" style="margin-top:.4rem;font-size:.88rem">${esc(s.bio||"")}</textarea>
+    </div>`).join("") || "<p class='dim'>No suppliers match.</p>";
+  $("supBody").querySelectorAll("[data-sup]").forEach(div=>{
+    div.querySelector(".supSave").onclick=async()=>{
+      const id=+div.dataset.sup, bio=div.querySelector(".supBio").value.trim();
+      const btn=div.querySelector(".supSave"); btn.disabled=true; btn.textContent="…";
+      const {error}=await db.from("suppliers").update({bio:bio||null}).eq("id",id);
+      btn.disabled=false;
+      if(error){ btn.textContent="Failed"; const m=$("supMsg"); m.textContent="Not saved — "+error.message+" (has bundle_a.sql been run?)"; m.className="msg err"; return; }
+      btn.textContent="Saved ✓"; setTimeout(()=>btn.textContent="Save",1500);
+      const s=(window._supAll||[]).find(x=>x.id===id); if(s) s.bio=bio||null;
+    };
+  });
+}
+$("supSearch").oninput=renderSup;
+
+/* ==================== WINE LISTS ==================== */
+let wlInited=false, wlCustSel=null, wlRegions=null;
+async function wlInit(){
+  await ensureCustomers(); await ensureSuppliers();
+  if(wlInited) return;
+  wlInited=true;
+  const regs=[...new Set(products.filter(p=>!p.obsolete).map(p=>tagOf(p)).filter(t=>t))].sort();
+  $("wlRegionList").innerHTML = regs.map(r=>`<option value="${esc(r)}">`).join("");
+  wlRegions = chipPicker("wlRegion","wlRegionChips", v=>{
+    const r=regs.find(x=>x.toLowerCase()===v.toLowerCase()); return r?{key:r,label:r}:null;
+  });
+  $("wlCust").addEventListener("change",()=>{
+    const v=$("wlCust").value.trim().toLowerCase();
+    wlCustSel=(window._rpCust||[]).find(c=>c.name.toLowerCase()===v)||null;
+    $("wlCustInfo").textContent = wlCustSel ? "Prices for "+wlCustSel.name+(wlCustSel.discount_pct>0?" — "+wlCustSel.discount_pct+"% discount applied":" — no discount on file, list prices shown") : "";
+    $("wlCustInfo").style.display = wlCustSel?"block":"none";
+  });
+  $("wlRun").onclick=wlGenerate;
+  $("wlSaveTpl").onclick=wlSaveTemplate;
+  $("wlDelTpl").onclick=wlDeleteTemplate;
+  $("wlTemplate").onchange=wlApplyTemplate;
+  wlLoadTemplates();
+}
+async function wlLoadTemplates(keepId){
+  try{ window._wlTpls = await fetchAll("wine_list_templates","id,name,config","name"); }
+  catch(e){
+    window._wlTpls=null;
+    $("wlTemplate").innerHTML='<option value="">templates need bundle_a.sql</option>';
+    $("wlTemplate").disabled=true; $("wlSaveTpl").style.display="none";
+    return;
+  }
+  $("wlTemplate").disabled=false; $("wlSaveTpl").style.display="";
+  $("wlTemplate").innerHTML='<option value="">&mdash; new list from scratch &mdash;</option>'+
+    window._wlTpls.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  if(keepId) $("wlTemplate").value=keepId;
+  $("wlDelTpl").style.display = $("wlTemplate").value ? "" : "none";
+}
+function wlApplyTemplate(){
+  const id=+$("wlTemplate").value;
+  $("wlDelTpl").style.display = id ? "" : "none";
+  if(!id) return;
+  const t=(window._wlTpls||[]).find(x=>x.id===id); if(!t) return;
+  const c=t.config||{};
+  $("wlTitle").value=c.title||"Wine List";
+  $("wlBasis").value=c.basis||"dp";
+  $("wlStock").checked=c.instock!==false;
+  $("wlBottle").checked=c.perbottle!==false;
+  $("wlBios").checked=!!c.bios;
+  wlRegions.sel.length=0;
+  (c.regions||[]).forEach(r=>wlRegions.sel.push({key:r,label:r}));
+  wlRegions.render();
+  wlCustSel=null; $("wlCust").value="";
+  if(c.customer_id){
+    const cu=(window._rpCust||[]).find(x=>x.id===c.customer_id);
+    if(cu){ wlCustSel=cu; $("wlCust").value=cu.name; }
+  }
+  $("wlCust").dispatchEvent(new Event("change"));
+}
+function wlConfig(){
+  wlRegions.sweep();
+  return { title:$("wlTitle").value.trim()||"Wine List", basis:$("wlBasis").value,
+    instock:$("wlStock").checked, perbottle:$("wlBottle").checked, bios:$("wlBios").checked,
+    customer_id: wlCustSel?wlCustSel.id:null, regions: wlRegions.sel.map(c=>c.key) };
+}
+async function wlSaveTemplate(){
+  const m=$("wlMsg"); m.className="msg";
+  const cur=+$("wlTemplate").value;
+  const curName = cur ? ((window._wlTpls||[]).find(t=>t.id===cur)||{}).name : "";
+  const name=prompt("Template name:", curName||$("wlTitle").value.trim()||"Wine list");
+  if(!name) return;
+  const cfg=wlConfig();
+  let res;
+  if(cur && name===curName) res = await db.from("wine_list_templates").update({config:cfg}).eq("id",cur).select().single();
+  else res = await db.from("wine_list_templates").insert({name:name.trim(), config:cfg}).select().single();
+  if(res.error){ m.textContent="Not saved — "+res.error.message; m.className="msg err"; return; }
+  m.textContent="Template \u201C"+name.trim()+"\u201D saved."; m.className="msg ok";
+  wlLoadTemplates(res.data.id);
+}
+async function wlDeleteTemplate(){
+  const id=+$("wlTemplate").value; if(!id) return;
+  const t=(window._wlTpls||[]).find(x=>x.id===id);
+  if(!confirm("Delete template \u201C"+(t?t.name:id)+"\u201D?")) return;
+  await db.from("wine_list_templates").delete().eq("id",id);
+  wlLoadTemplates();
+}
+async function wlGenerate(){
+  const m=$("wlMsg"); m.className="msg";
+  const cfg=wlConfig();
+  $("wlRun").disabled=true;
+  let stock={};
+  try{
+    const val=await fetchAll("v_stock_valuation","product_id,owner_customer_id,qty_bottles");
+    val.forEach(r=>{ if(r.owner_customer_id!=null) return; stock[r.product_id]=(stock[r.product_id]||0)+Number(r.qty_bottles); });
+  }catch(e){}
+  $("wlRun").disabled=false;
+  const disc = wlCustSel&&wlCustSel.discount_pct>0 ? (1-wlCustSel.discount_pct/100) : 1;
+  let rows = products.filter(p=>!p.obsolete && Number(p.case_price)>0);
+  if(cfg.instock) rows=rows.filter(p=>(stock[p.id]||0)>0);
+  if(cfg.regions.length){ const set=new Set(cfg.regions.map(r=>r.toLowerCase())); rows=rows.filter(p=>set.has(tagOf(p).toLowerCase())); }
+  if(!rows.length){ m.textContent="Nothing to list — loosen the filters (is \u201Cin-stock only\u201D hiding everything?)."; m.className="msg err"; return; }
+  const supn={}, supbio={};
+  (window._supAll||[]).forEach(s=>{supn[s.id]=s.name; supbio[s.id]=s.bio||"";});
+  const dutyOf=p=>dutyCats[p.duty_category_id]?Number(dutyCats[p.duty_category_id].duty_per_case):0;
+  const priceDP=p=>Number(p.case_price)*disc;
+  const priceIB=p=>Math.max(0,Number(p.case_price)-dutyOf(p))*disc;
+  const groups={};
+  rows.forEach(p=>{ const r=tagOf(p)||"Other"; (groups[r]=groups[r]||[]).push(p); });
+  const basis=cfg.basis, showBtl=cfg.perbottle;
+  let priceHead = basis==="both"
+    ? `<th class="r">In bond €/case</th><th class="r">Duty paid €/case</th>${showBtl?'<th class="r">Duty paid €/btl</th>':""}`
+    : `<th class="r">€ per case</th>${showBtl?'<th class="r">€ per bottle</th>':""}`;
+  let html="";
+  Object.keys(groups).sort().forEach(reg=>{
+    html+=`<h2>${esc(reg)}</h2>`;
+    const list=groups[reg].sort((a,b)=>{
+      const sa=supn[a.supplier_id]||"\uFFFF", sb=supn[b.supplier_id]||"\uFFFF";
+      return cfg.bios && sa!==sb ? sa.localeCompare(sb) : a.name.localeCompare(b.name);
+    });
+    let lastSup=null, body="";
+    list.forEach(p=>{
+      if(cfg.bios && p.supplier_id!==lastSup){
+        lastSup=p.supplier_id;
+        const sn=supn[p.supplier_id];
+        if(sn){
+          if(body){ html+=`<table><thead><tr><th>Code</th><th>Wine</th><th>Case</th>${priceHead}</tr></thead><tbody>${body}</tbody></table>`; body=""; }
+          html+=`<h3>${esc(sn)}</h3>`;
+          if(supbio[p.supplier_id]) html+=`<p class="bio">${esc(supbio[p.supplier_id])}</p>`;
+        }
+      }
+      const perCase = basis==="ib"?priceIB(p):priceDP(p);
+      let cells = basis==="both"
+        ? `<td class="r">${eur(priceIB(p))}</td><td class="r">${eur(priceDP(p))}</td>${showBtl?`<td class="r">${eur(priceDP(p)/p.bottles_in_case)}</td>`:""}`
+        : `<td class="r">${eur(perCase)}</td>${showBtl?`<td class="r">${eur(perCase/p.bottles_in_case)}</td>`:""}`;
+      body+=`<tr><td class="dim">${p.id}</td><td>${esc(p.name)}</td><td class="dim">${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml</td>${cells}</tr>`;
+    });
+    if(body) html+=`<table><thead><tr><th>Code</th><th>Wine</th><th>Case</th>${priceHead}</tr></thead><tbody>${body}</tbody></table>`;
+  });
+  const today=new Date().toLocaleDateString("en-IE",{day:"numeric",month:"long",year:"numeric"});
+  const basisNote = basis==="ib" ? "In-bond prices exclude excise duty; duty and VAT apply on release from bond."
+    : basis==="both" ? "In-bond prices exclude excise duty; duty and VAT apply on release from bond. Duty-paid prices include excise duty."
+    : "Prices include excise duty.";
+  const w=window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(cfg.title)}</title><style>
+    body{font-family:Georgia,serif;color:#222;margin:2.2cm 2cm;font-size:10.5pt}
+    .head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #5C1A2E;padding-bottom:.5em;margin-bottom:.4em}
+    h1{font-size:20pt;color:#5C1A2E;margin:0}
+    .co{font-size:9pt;color:#555;text-align:right;line-height:1.4}
+    .sub{margin-bottom:1.4em;color:#555;font-size:10pt;font-style:italic}
+    h2{font-size:13pt;color:#5C1A2E;margin:1.3em 0 .35em;border-bottom:1px solid #e5ddd2;padding-bottom:.15em}
+    h3{font-size:10.5pt;margin:.9em 0 .1em}
+    .bio{font-size:9pt;color:#666;font-style:italic;margin:.1em 0 .4em;max-width:16cm}
+    table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:.5em}
+    th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#888;text-align:left;border-bottom:1px solid #d8cfc2;padding:.25em .4em}
+    td{padding:.22em .4em;border-bottom:1px solid #f0e9df}
+    .r{text-align:right;font-variant-numeric:tabular-nums}
+    .dim{color:#999}
+    .foot{margin-top:2.2em;font-size:8pt;color:#999;font-style:italic;border-top:1px solid #e5ddd2;padding-top:.6em}
+    @media print{h2{break-after:avoid}}
+  </style></head><body>
+  <div class="head"><h1>Moores&rsquo; Wines</h1><div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
+  <div class="sub">${esc(cfg.title)} &mdash; ${today}${wlCustSel?" &mdash; prepared for "+esc(wlCustSel.name):""}</div>
+  ${html}
+  <div class="foot">${basisNote} All prices in euro, exclusive of VAT unless stated. Subject to remaining unsold &mdash; E&amp;OE.</div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+  m.textContent=rows.length+" wines on the list."; m.className="msg ok";
+}
+
+/* ==================== DELIVERY NOTES ==================== */
+let dnInited=false, dnCustSel=null;
+async function dnInit(){
+  await ensureCustomers();
+  if(dnInited){ renderDns(); return; }
+  dnInited=true;
+  $("dnDate").value=new Date().toISOString().slice(0,10);
+  $("dnCust").addEventListener("change",()=>{
+    const v=$("dnCust").value.trim().toLowerCase();
+    dnCustSel=(window._rpCust||[]).find(c=>c.name.toLowerCase()===v)||null;
+    if(dnCustSel){
+      $("dnAddr").value=[dnCustSel.name,dnCustSel.address1,dnCustSel.address2,dnCustSel.address3,dnCustSel.address4,dnCustSel.eircode]
+        .filter(x=>x&&String(x).trim()).join("\n");
+    }
+  });
+  $("dnAddLine").onclick=()=>addDnLine();
+  addDnLine();
+  $("dnSave").onclick=saveDn;
+  renderDns();
+}
+function addDnLine(){
+  const i=Date.now()+Math.random();
+  $("dnLines").insertAdjacentHTML("beforeend",`
+  <div style="display:grid;grid-template-columns:3fr 80px 120px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-dn="${i}">
+    <div><div class="picker"><input class="dnProd" placeholder="wine \u2014 pick from the list, or type anything&hellip;" autocomplete="off"><ul style="display:none"></ul></div></div>
+    <div><label>Qty</label><input class="dnQty" type="number" min="0" step="1" value="1"></div>
+    <div><label>Unit</label><select class="dnUnit"><option>Case</option><option>Bottle</option><option>Gift pack</option><option>Box</option></select></div>
+    <button onclick="this.closest('[data-dn]').remove()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">\u2715</button>
+  </div>`);
+  const div=$("dnLines").lastElementChild;
+  const inp=div.querySelector(".dnProd"), ul=inp.nextElementSibling;
+  inp.oninput=()=>{
+    inp.dataset.pid="";
+    const q=inp.value.trim().toLowerCase();
+    if(q.length<2){ul.style.display="none";return;}
+    const hits=products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,10);
+    if(!hits.length){ul.style.display="none";return;}
+    ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${p.id} \u2014 ${esc(p.name)} <span class="cs">(${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml)</span></li>`).join("");
+    ul.style.display="block";
+    ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+      const p=products.find(x=>x.id==li.dataset.id);
+      inp.value=p.name; inp.dataset.pid=p.id; ul.style.display="none";
+    });
+  };
+}
+async function saveDn(){
+  const m=$("dnMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  const addr=$("dnAddr").value.trim();
+  if(!addr) return fail("Fill in the deliver-to address (picking a customer fills it in).");
+  const lines=[...document.querySelectorAll("#dnLines [data-dn]")].map(div=>({
+    pid:+div.querySelector(".dnProd").dataset.pid||null,
+    desc:div.querySelector(".dnProd").value.trim(),
+    qty:+div.querySelector(".dnQty").value||0,
+    unit:div.querySelector(".dnUnit").value,
+  })).filter(l=>l.desc&&l.qty>0);
+  if(!lines.length) return fail("Add at least one line with a description and quantity.");
+  $("dnSave").disabled=true;
+  const {data:note, error:e1}=await db.from("delivery_notes").insert({
+    note_date:$("dnDate").value, customer_id:dnCustSel?dnCustSel.id:null,
+    deliver_to:addr, reference:$("dnRef").value.trim()||null, comment:$("dnComment").value.trim()||null
+  }).select().single();
+  if(e1){ $("dnSave").disabled=false; return fail("Not saved — "+e1.message+" (has bundle_a.sql been run?)"); }
+  const {error:e2}=await db.from("delivery_note_lines").insert(lines.map(l=>({
+    note_id:note.id, product_id:l.pid, description:l.desc, qty:l.qty, unit:l.unit})));
+  $("dnSave").disabled=false;
+  if(e2) return fail("Header saved but lines failed — "+e2.message);
+  m.textContent="Delivery note DN-"+note.id+" saved."; m.className="msg ok";
+  printDn(note.id);
+  $("dnLines").innerHTML=""; addDnLine();
+  $("dnRef").value=""; $("dnComment").value="";
+  renderDns();
+}
+async function renderDns(){
+  let data;
+  try{
+    const res=await db.from("delivery_notes").select("id,note_date,reference,customers(name),delivery_note_lines(id)").order("id",{ascending:false}).limit(50);
+    if(res.error) throw res.error;
+    data=res.data;
+  }catch(e){
+    $("dnList").innerHTML="<tr><td colspan=6 class='dim'>Delivery notes need the bundle_a.sql patch — run it in Supabase, then reload.</td></tr>";
+    return;
+  }
+  $("dnList").innerHTML=(data||[]).map(d=>`<tr>
+    <td><a href="#" onclick="event.preventDefault();printDn(${d.id})" style="color:var(--claret)">DN-${d.id}</a></td>
+    <td class="dim">${d.note_date}</td><td>${esc(d.customers?.name||"")}</td>
+    <td class="dim">${esc(d.reference||"")}</td>
+    <td class="num">${(d.delivery_note_lines||[]).length}</td>
+    <td><button onclick="printDn(${d.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Print</button>
+        <button onclick="delDn(${d.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Delete</button></td></tr>`).join("")
+    || "<tr><td colspan=6 class='dim'>No delivery notes yet.</td></tr>";
+}
+async function delDn(id){
+  if(!confirm("Delete delivery note DN-"+id+"?")) return;
+  await db.from("delivery_notes").delete().eq("id",id);
+  renderDns();
+}
+async function printDn(id){
+  const {data:note}=await db.from("delivery_notes").select("*, customers(name)").eq("id",id).maybeSingle();
+  if(!note) return;
+  const {data:lines}=await db.from("delivery_note_lines").select("*").eq("note_id",id).order("id");
+  const rows=(lines||[]).map(l=>{
+    const p=l.product_id?products.find(x=>x.id===l.product_id):null;
+    return `<tr><td>${esc(l.description)}${p?` <span class="dim">(${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml)</span>`:""}</td>
+      <td class="r">${l.qty}</td><td>${esc(l.unit)}</td></tr>`;
+  }).join("");
+  const w=window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>Delivery note DN-${note.id}</title><style>
+    body{font-family:Georgia,serif;color:#222;margin:2.2cm 2cm;font-size:11pt}
+    .head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #5C1A2E;padding-bottom:.5em;margin-bottom:1.4em}
+    h1{font-size:20pt;color:#5C1A2E;margin:0}
+    .co{font-size:9pt;color:#555;text-align:right;line-height:1.4}
+    .dtitle{font-size:14pt;letter-spacing:.18em;color:#5C1A2E;margin-bottom:1em}
+    .meta{display:flex;justify-content:space-between;margin-bottom:1.6em}
+    .meta div{line-height:1.5}
+    .lbl{font-size:8pt;letter-spacing:.08em;color:#888;text-transform:uppercase}
+    .addr{white-space:pre-line}
+    table{width:100%;border-collapse:collapse;font-size:10.5pt}
+    th{font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em;color:#666;text-align:left;border-bottom:1.5px solid #5C1A2E;padding:.35em .4em}
+    td{padding:.4em .4em;border-bottom:1px solid #e5ddd2}
+    .r{text-align:right;font-variant-numeric:tabular-nums}
+    .dim{color:#999;font-size:9pt}
+    .sig{margin-top:3.5em;display:flex;gap:3em}
+    .sig div{flex:1;border-top:1px solid #222;padding-top:.4em;font-size:9pt;color:#555}
+    .foot{margin-top:3em;font-size:8pt;color:#999;font-style:italic;border-top:1px solid #e5ddd2;padding-top:.6em}
+  </style></head><body>
+  <div class="head"><h1>Moores&rsquo; Wines</h1><div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
+  <div class="dtitle">DELIVERY NOTE</div>
+  <div class="meta">
+    <div><span class="lbl">Deliver to</span><br><span class="addr">${esc(note.deliver_to||"")}</span></div>
+    <div style="text-align:right"><span class="lbl">Note</span><br><strong>No. DN-${note.id}</strong><br>${note.note_date}
+    ${note.reference?"<br>Ref: "+esc(note.reference):""}</div>
+  </div>
+  ${note.comment?"<p style='font-size:9.5pt;color:#555'>"+esc(note.comment)+"</p>":""}
+  <table><thead><tr><th>Description</th><th class="r">Qty</th><th>Unit</th></tr></thead>
+  <tbody>${rows||"<tr><td colspan=3 class='dim'>No lines.</td></tr>"}</tbody></table>
+  <div class="sig">
+    <div>Received by (print name)</div>
+    <div>Signature</div>
+    <div>Date</div>
+  </div>
+  <div class="foot">Goods remain the property of Moores&rsquo; Wines until paid for in full. This note carries no prices and is not an invoice.</div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
 
 init();
 </script>
