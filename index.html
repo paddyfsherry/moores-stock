@@ -114,13 +114,18 @@
 </header>
 
 <nav id="mainNav" style="display:none">
-  <button data-view="stock" class="active">Stock</button>
-  <button data-view="move">Movements</button>
+  <button data-view="cockpit" class="active">Cockpit</button>
   <button data-view="newinv">Sales</button>
+  <button data-view="stock">Stock</button>
   <button data-view="products">Products</button>
-  <button data-view="recon">Reconcile</button>
   <button data-view="reports">Reports</button>
 </nav>
+<div id="stockSub" style="display:none;background:var(--paper);padding:.5rem 1.2rem;gap:.4rem;border-bottom:1px solid var(--line)">
+  <button data-sub="onhand" class="active" onclick="showStockSub('onhand')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">On hand</button>
+  <button data-sub="move" onclick="showStockSub('move')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Movements</button>
+  <button data-sub="recon" onclick="showStockSub('recon')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Reconcile</button>
+</div>
+<style>#stockSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
 
 <main id="appMain">
 
@@ -136,21 +141,51 @@
     <div class="msg" id="liMsg"></div>
   </div>
 
+  <!-- ========== COCKPIT ========== -->
+  <div id="viewCockpit" class="view" style="display:none">
+    <div class="cards">
+      <div class="card tot"><div class="k">Stock value</div><div class="v" id="ckVal">—</div></div>
+      <div class="card"><div class="k">Wines in stock</div><div class="v" id="ckWines">—</div></div>
+      <div class="card dp"><div class="k">Bottles sold, 90 days</div><div class="v" id="ck90">—</div></div>
+      <div class="card bond"><div class="k">Low / out (&lt;4 wks cover)</div><div class="v" id="ckLow">—</div></div>
+    </div>
+    <div class="tools">
+      <input type="search" id="ckSearch" placeholder="Search wines, codes, regions…">
+      <select id="ckSort" style="max-width:240px">
+        <option value="cover">Sort: weeks of cover (low first)</option>
+        <option value="v90">Sort: 90-day sales (high first)</option>
+        <option value="mpct">Sort: margin % (high first)</option>
+        <option value="meur">Sort: margin € /case (high first)</option>
+        <option value="stock">Sort: stock (high first)</option>
+        <option value="name">Sort: name</option>
+      </select>
+      <span class="count" id="ckCount"></span>
+    </div>
+    <div class="wrap"><table>
+      <thead><tr><th>Code</th><th>Wine</th><th>Region</th><th class="num">Stock (btls)</th><th class="num">90-day sales</th><th class="num">Weeks cover</th><th class="num">Cost €/case</th><th class="num">Price €/case</th><th class="num">Margin €</th><th class="num">Margin %</th></tr></thead>
+      <tbody id="ckBody"></tbody>
+    </table></div>
+  </div>
+
   <!-- ========== STOCK ========== -->
   <div id="viewStock" class="view" style="display:none">
     <div class="cards">
       <div class="card bond"><div class="k">Under bond value</div><div class="v" id="cardUB">—</div></div>
       <div class="card dp"><div class="k">Duty paid value</div><div class="v" id="cardDP">—</div></div>
       <div class="card tot"><div class="k">Total stock value</div><div class="v" id="cardTot">—</div></div>
+      <div class="card"><div class="k">Customer reserves</div><div class="v" id="cardRes">—</div></div>
     </div>
     <div class="tools">
       <input type="search" id="stockSearch" placeholder="Search wines…">
       <select id="stockLoc" style="max-width:260px"><option value="">All locations</option></select>
+      <label style="display:flex;align-items:center;gap:.35rem;margin:0;text-transform:none;font-size:.85rem;font-weight:500;color:var(--ink)">
+        <input type="checkbox" id="stockRes" style="width:auto"> show reserves
+      </label>
       <span class="count" id="stockCount"></span>
     </div>
     <div class="wrap"><table id="stockTable">
       <thead><tr>
-        <th>Code</th><th>Wine</th><th>Region</th><th>Case</th><th>Location</th><th>Status</th>
+        <th>Code</th><th>Wine</th><th>Owner</th><th>Region</th><th>Case</th><th>Location</th><th>Status</th>
         <th class="num">Cases</th><th class="num">Bottles</th>
         <th class="num">Cost €</th><th class="num">Duty €</th><th class="num">Value €</th>
       </tr></thead>
@@ -195,6 +230,11 @@
         <div id="mvToWrap"><label for="mvTo">To location</label><select id="mvTo"></select></div>
       </div>
 
+      <div class="grid2">
+        <div><label for="mvOwner">Belongs to customer <span style="text-transform:none;font-weight:400">(reserve — leave blank for Moores' own stock)</span></label>
+          <input id="mvOwner" list="rpCustList" placeholder="blank = Moores' stock" autocomplete="off"></div>
+        <div></div>
+      </div>
       <div class="grid2">
         <div><label for="mvRot">Rotation number <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="mvRot" placeholder="e.g. 26/0142"></div>
         <div><label for="mvRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="mvRef" placeholder="Invoice no., PO no…"></div>
@@ -476,7 +516,8 @@ function showLogin(){
   $("viewLogin").style.display="block";
   $("mainNav").style.display="none";
   $("whoBox").style.display="none";
-  ["viewStock","viewMove","viewNewInv","viewHistory","viewProducts","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
+  ["viewCockpit","viewStock","viewMove","viewNewInv","viewHistory","viewProducts","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
+  $("stockSub").style.display="none";
 }
 async function enter(session){
   $("viewLogin").style.display="none";
@@ -484,7 +525,7 @@ async function enter(session){
   $("whoBox").style.display="flex";
   $("whoEmail").textContent = session.user.email;
   await loadRefData();
-  switchView("stock");
+  switchView("cockpit");
 }
 $("btnLogin").onclick = async ()=>{
   const m=$("liMsg"); m.className="msg";
@@ -515,24 +556,30 @@ async function loadRefData(){
   $("mvTo").innerHTML = opts;
   $("mvDate").value = new Date().toISOString().slice(0,10);
   applyMoveType();
+  ensureCustomers();
 }
 
 /* ==================== NAV ==================== */
 document.querySelectorAll("#mainNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 function switchView(v){
   document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  $("viewStock").style.display   = v==="stock"?"block":"none";
-  $("viewMove").style.display    = v==="move"?"block":"none";
-  $("viewHistory").style.display = v==="move"?"block":"none";
-  $("viewNewInv").style.display  = v==="newinv"?"block":"none";
-  if(v==="newinv") initNewInv();
-  $("viewProducts").style.display= v==="products"?"block":"none";
-  $("viewRecon").style.display   = v==="recon"?"block":"none";
-  $("viewReports").style.display = v==="reports"?"block":"none";
-  if(v==="reports" && !window._rpInit){ window._rpInit=1; rpDefaults(); }
-  if(v==="stock") loadStock();
-  if(v==="move") loadHistory();
-  if(v==="products") renderProducts();
+  ["viewCockpit","viewStock","viewMove","viewNewInv","viewHistory","viewProducts","viewRecon","viewReports"].forEach(x=>$(x).style.display="none");
+  $("stockSub").style.display = v==="stock" ? "flex":"none";
+  if(v==="cockpit"){ $("viewCockpit").style.display="block"; loadCockpit(); }
+  if(v==="newinv"){ $("viewNewInv").style.display="block"; initNewInv(); }
+  if(v==="products"){ $("viewProducts").style.display="block"; renderProducts(); }
+  if(v==="reports"){ $("viewReports").style.display="block"; if(!window._rpInit){window._rpInit=1; rpDefaults();} }
+  if(v==="stock") showStockSub(window._stockSub||"onhand");
+}
+function showStockSub(s){
+  window._stockSub=s;
+  document.querySelectorAll("#stockSub button").forEach(b=>b.classList.toggle("active",b.dataset.sub===s));
+  $("viewStock").style.display = s==="onhand"?"block":"none";
+  $("viewMove").style.display = s==="move"?"block":"none";
+  $("viewHistory").style.display = s==="move"?"block":"none";
+  $("viewRecon").style.display = s==="recon"?"block":"none";
+  if(s==="onhand") loadStock();
+  if(s==="move") loadHistory();
 }
 
 /* ==================== STOCK VIEW ==================== */
@@ -546,19 +593,26 @@ function renderStock(){
   const q = $("stockSearch").value.trim().toLowerCase();
   const lf = $("stockLoc").value;
   const pmapT={}; products.forEach(p=>pmapT[p.id]=tagOf(p).toLowerCase());
-  const rows = stockRows.filter(r=>(!q || r.product.toLowerCase().includes(q) || String(r.product_id).includes(q) || (pmapT[r.product_id]||"").includes(q)) && (!lf || String(r.location_id)===lf));
-  let ub=0, dp=0;
-  stockRows.forEach(r=>{ r.duty_status==="under_bond" ? ub+=Number(r.total_value) : dp+=Number(r.total_value); });
+  const showRes = $("stockRes").checked;
+  const rows = stockRows.filter(r=>(showRes || r.owner_customer_id==null)
+    && (!q || r.product.toLowerCase().includes(q) || String(r.product_id).includes(q) || (pmapT[r.product_id]||"").includes(q) || (r.owner||"").toLowerCase().includes(q))
+    && (!lf || String(r.location_id)===lf));
+  let ub=0, dp=0, res=0;
+  stockRows.forEach(r=>{
+    if(r.owner_customer_id!=null){ res+=Number(r.qty_bottles); return; }
+    r.duty_status==="under_bond" ? ub+=Number(r.total_value) : dp+=Number(r.total_value);
+  });
   $("cardUB").textContent = "€"+eur(ub);
   $("cardDP").textContent = "€"+eur(dp);
   $("cardTot").textContent= "€"+eur(ub+dp);
+  $("cardRes").textContent = res ? res.toLocaleString()+" btls" : "none";
   const tb = $("stockTable").querySelector("tbody");
   tb.innerHTML = rows.map(r=>{
     const negC = r.qty_bottles<0 ? ' class="num neg"' : ' class="num"';
     const tag = r.duty_status==="under_bond" ? '<span class="tag bond">Under bond</span>' : '<span class="tag dp">Duty paid</span>';
     const p = products.find(p=>p.id===r.product_id);
     const caseTxt = p ? p.bottles_in_case+"×"+p.bottle_size_ml+"ml" : "";
-    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td class="dim">${r.product_id}</td><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${esc(tagOf(p))}</td><td class="dim">${caseTxt}</td>
+    return `<tr style="cursor:pointer" onclick="openDrill(${r.product_id})" title="Click for movement history"><td class="dim">${r.product_id}</td><td style="color:var(--claret);text-decoration:underline dotted">${esc(r.product)}</td><td class="dim">${r.owner_customer_id!=null?"<span class='tag dp'>"+esc(r.owner||"reserve")+"</span>":""}</td><td class="dim">${esc(tagOf(p))}</td><td class="dim">${caseTxt}</td>
       <td>${esc(r.location)}</td><td>${tag}</td>
       <td${negC}>${r.cases}</td><td${negC}>${r.qty_bottles}</td>
       <td class="num">${eur(r.cost_value)}</td><td class="num">${eur(r.duty_value)}</td><td class="num"><strong>${eur(r.total_value)}</strong></td></tr>`;
@@ -567,6 +621,7 @@ function renderStock(){
   $("stockEmpty").style.display = stockRows.length ? "none" : "block";
 }
 $("stockSearch").oninput = renderStock;
+$("stockRes").onchange = renderStock;
 $("stockLoc").onchange = renderStock;
 
 /* ==================== MOVEMENT ENTRY ==================== */
@@ -617,8 +672,17 @@ $("btnSaveMove").onclick = async ()=>{
   const qty = cases*chosenProduct.bottles_in_case + loose;
   if(qty<=0) return fail("Enter a quantity — cases, loose bottles, or both.");
   const t=$("mvType").value, r=typeRules[t];
+  let ownerId = null;
+  const ot=$("mvOwner").value.trim();
+  if(ot){
+    await ensureCustomers();
+    const oc=(window._rpCust||[]).find(c=>c.name.toLowerCase()===ot.toLowerCase());
+    if(!oc) return fail("Reserve owner not recognised — pick the customer from the list, or leave blank.");
+    ownerId = oc.id;
+  }
   const row = {
     movement_date: $("mvDate").value,
+    owner_customer_id: ownerId,
     movement_type: t.startsWith("adj") ? "adjustment" : t,
     product_id: chosenProduct.id,
     qty_bottles: qty,
@@ -648,7 +712,7 @@ $("btnSaveMove").onclick = async ()=>{
   if(error) return fail("Not saved — "+error.message);
   m.textContent = savedTxt;
   m.className="msg ok";
-  $("mvCases").value=0; $("mvBottles").value=0; $("mvRot").value=""; $("mvRef").value="";
+  $("mvCases").value=0; $("mvBottles").value=0; $("mvRot").value=""; $("mvRef").value=""; $("mvOwner").value="";
 };
 
 
@@ -1339,6 +1403,66 @@ async function delDraft(id){
   await db.from("invoices").delete().eq("id",id).eq("status","draft");
   renderDrafts();
 }
+
+/* ==================== COCKPIT ==================== */
+let ckRows=[];
+async function loadCockpit(){
+  $("ckBody").innerHTML="<tr><td colspan=10 class='dim'>Loading…</td></tr>";
+  const since = new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+  const velP = (async()=>{ let rows=[],off=0;
+    for(;;){ const {data,error}=await db.from("v_report_lines").select("product_id,bottles").gte("invoice_date",since).range(off,off+999);
+      if(error||!data) break; rows=rows.concat(data); if(data.length<1000) break; off+=1000; }
+    return rows; })();
+  const [val, vel] = await Promise.all([ fetchAll("v_stock_valuation","product_id,owner_customer_id,duty_status,qty_bottles,total_value"), velP ]);
+  const stock={}; let ub=0,dp=0;
+  val.forEach(r=>{ if(r.owner_customer_id!=null) return;
+    stock[r.product_id]=(stock[r.product_id]||0)+Number(r.qty_bottles);
+    r.duty_status==="under_bond"?ub+=Number(r.total_value):dp+=Number(r.total_value); });
+  const v90={}; vel.forEach(l=>{ if(l.product_id!=null) v90[l.product_id]=(v90[l.product_id]||0)+Number(l.bottles||0); });
+  const pids = new Set([...Object.keys(stock), ...Object.keys(v90)].map(Number));
+  ckRows=[];
+  let tot90=0, low=0;
+  pids.forEach(pid=>{
+    const p=products.find(x=>x.id===pid); if(!p) return;
+    const s=stock[pid]||0, v=v90[pid]||0;
+    if(s<=0 && v<=0) return;
+    tot90+=v;
+    const perWeek = v/12.857;
+    const cover = perWeek>0 ? s/perWeek : (s>0 ? Infinity : 0);
+    const duty = dutyCats[p.duty_category_id]?dutyCats[p.duty_category_id].duty_per_case:0;
+    const meur = p.case_price - p.case_cost - duty;
+    const mpct = p.case_price>0 ? 100*meur/p.case_price : 0;
+    if(cover<4 && v>0) low++;
+    ckRows.push({pid, name:p.name, tag:tagOf(p), s, v, cover, cost:p.case_cost, price:p.case_price, meur, mpct});
+  });
+  $("ckVal").textContent="€"+eur(ub+dp);
+  $("ckWines").textContent=Object.values(stock).filter(x=>x>0).length;
+  $("ck90").textContent=Math.round(tot90).toLocaleString();
+  $("ckLow").textContent=low;
+  renderCockpit();
+}
+function renderCockpit(){
+  const q=$("ckSearch").value.trim().toLowerCase();
+  const sort=$("ckSort").value;
+  let rows=ckRows.filter(r=>!q||r.name.toLowerCase().includes(q)||String(r.pid).includes(q)||r.tag.toLowerCase().includes(q));
+  const cmp={cover:(a,b)=>a.cover-b.cover, v90:(a,b)=>b.v-a.v, mpct:(a,b)=>b.mpct-a.mpct,
+             meur:(a,b)=>b.meur-a.meur, stock:(a,b)=>b.s-a.s, name:(a,b)=>a.name.localeCompare(b.name)}[sort];
+  rows.sort(cmp);
+  $("ckBody").innerHTML = rows.slice(0,400).map(r=>{
+    const coverTxt = r.cover===Infinity ? "∞" : r.cover.toFixed(1);
+    const flag = (r.v>0 && r.s<=0) ? " style='background:#F7E3E3'" : (r.cover<4 && r.v>0 ? " style='background:var(--bond-bg)'" : "");
+    return `<tr${flag}><td class="dim">${r.pid}</td>
+      <td style="cursor:pointer;color:var(--claret);text-decoration:underline dotted" onclick="openDrill(${r.pid})">${esc(r.name)}</td>
+      <td class="dim">${esc(r.tag)}</td>
+      <td class="num${r.s<0?" neg":""}">${r.s}</td><td class="num">${Math.round(r.v)}</td>
+      <td class="num${r.cover<4&&r.v>0?" neg":""}">${coverTxt}</td>
+      <td class="num">${eur(r.cost)}</td><td class="num">${eur(r.price)}</td>
+      <td class="num${r.meur<0?" neg":""}">${eur(r.meur)}</td><td class="num${r.mpct<0?" neg":""}">${r.mpct.toFixed(1)}%</td></tr>`;
+  }).join("") || "<tr><td colspan=10 class='dim'>Nothing matches.</td></tr>";
+  $("ckCount").textContent = rows.length>400 ? "showing 400 of "+rows.length : rows.length+" wines";
+}
+$("ckSearch").oninput=renderCockpit;
+$("ckSort").onchange=renderCockpit;
 
 init();
 </script>
