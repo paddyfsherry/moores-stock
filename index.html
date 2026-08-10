@@ -299,6 +299,11 @@
           <option value="ib">In bond</option>
           <option value="both">Both (two columns)</option>
         </select></div>
+        <div><label for="wlGroup">Group wines by</label><select id="wlGroup">
+          <option value="region">Region</option>
+          <option value="supplier">Producer</option>
+          <option value="region_supplier">Region, then producer</option>
+        </select></div>
       </div>
       <div class="grid2">
         <div><label for="wlCust">Customer pricing <span style="text-transform:none;font-weight:400">(optional &mdash; applies their discount)</span></label>
@@ -311,7 +316,7 @@
       <div style="display:flex;gap:1.4rem;flex-wrap:wrap;margin-top:.8rem">
         <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlStock" checked style="width:auto"> in-stock wines only</label>
         <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlBottle" checked style="width:auto"> show per-bottle price</label>
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlBios" style="width:auto"> include producer bios</label>
+        <label id="wlBiosLbl" style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlBios" style="width:auto"> include producer bios</label>
       </div>
       <button class="btn" id="wlRun">Preview &amp; print</button>
       <button class="btn" id="wlSaveTpl" style="background:#7A6E63">Save as template</button>
@@ -323,22 +328,8 @@
   <!-- ========== DELIVERY NOTES ========== -->
   <div id="viewDelNotes" class="view" style="display:none">
     <div class="panel">
-      <h2>New delivery note</h2>
-      <p class="hint">A courier docket &mdash; no prices, no effect on stock. This replaces the GIFT BOX (3005) workaround. Print two copies: one travels, one comes back signed.</p>
-      <div class="grid3">
-        <div><label for="dnCust">Customer</label><input id="dnCust" list="rpCustList" placeholder="start typing&hellip;" autocomplete="off"></div>
-        <div><label for="dnDate">Date</label><input id="dnDate" type="date"></div>
-        <div><label for="dnRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="dnRef" placeholder="order no. / invoice no."></div>
-      </div>
-      <label for="dnAddr">Deliver to <span style="text-transform:none;font-weight:400">(fills in from the customer &mdash; edit freely)</span></label>
-      <textarea id="dnAddr" rows="4"></textarea>
-      <label>Goods</label>
-      <div id="dnLines"></div>
-      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="dnAddLine">+ add line</button>
-      <label for="dnComment">Delivery instructions <span style="text-transform:none;font-weight:400">(optional)</span></label>
-      <input id="dnComment" placeholder="e.g. leave with reception, call on arrival">
-      <button class="btn" id="dnSave">Save &amp; print</button>
-      <div class="msg" id="dnMsg"></div>
+      <h2>Delivery notes</h2>
+      <p class="hint">Every delivery note comes from an invoice &mdash; open any invoice or draft (from Sales or Reports) and press <strong>Delivery note</strong>. The customer, address and lines fill in; untick lines for a split delivery. Prices never print. For samples, replacements or gifts, raise a zero-priced draft invoice first &mdash; that way every departure of stock has a document and a movement behind it.</p>
     </div>
     <div class="panel">
       <h2>Recent delivery notes</h2>
@@ -514,7 +505,8 @@
     <div style="background:var(--paper);max-width:760px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2 class="serif" id="invTitle" style="font-size:1.15rem"></h2>
-        <button onclick="printInvoice()" style="margin-left:auto;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print</button>
+        <button onclick="dnFromInvoice()" style="margin-left:auto;background:#7A6E63;color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Delivery note</button>
+        <button onclick="printInvoice()" style="background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print</button>
         <button onclick="closeInv()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
       </div>
       <p class="hint" id="invMeta" style="margin:.2rem 0 .8rem"></p>
@@ -523,6 +515,29 @@
         <tbody id="invBody"></tbody>
       </table></div>
       <p id="invTotals" style="text-align:right;margin-top:.7rem;font-family:'Libre Caslon Text',serif"></p>
+    </div>
+  </div>
+
+  <!-- ========== DELIVERY NOTE FROM INVOICE ========== -->
+  <div id="dnmWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:70" onclick="if(event.target===this)dnmClose()">
+    <div style="background:var(--paper);max-width:620px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" style="font-size:1.15rem">Delivery note &mdash; <span id="dnmInv"></span></h2>
+        <button onclick="dnmClose()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .8rem">No prices print. Untick any line not travelling in this drop &mdash; make a second note later for the rest.</p>
+      <div class="grid2">
+        <div><label for="dnmDate">Date</label><input id="dnmDate" type="date"></div>
+        <div><label for="dnmRef">Reference</label><input id="dnmRef"></div>
+      </div>
+      <label for="dnmAddr">Deliver to <span style="text-transform:none;font-weight:400">(edit freely)</span></label>
+      <textarea id="dnmAddr" rows="4"></textarea>
+      <label>Goods</label>
+      <div id="dnmLines" style="display:flex;flex-direction:column;gap:.25rem;margin:.2rem 0 .6rem"></div>
+      <label for="dnmComment">Delivery instructions <span style="text-transform:none;font-weight:400">(optional)</span></label>
+      <input id="dnmComment" placeholder="e.g. leave with reception, call on arrival">
+      <button class="btn" id="dnmSave" onclick="dnmSaveNote()">Save &amp; print</button>
+      <div class="msg" id="dnmMsg"></div>
     </div>
   </div>
 
@@ -1638,7 +1653,16 @@ async function wlInit(){
   $("wlSaveTpl").onclick=wlSaveTemplate;
   $("wlDelTpl").onclick=wlDeleteTemplate;
   $("wlTemplate").onchange=wlApplyTemplate;
+  $("wlGroup").onchange=wlGroupChanged;
+  wlGroupChanged();
   wlLoadTemplates();
+}
+function wlGroupChanged(){
+  const plainRegion = $("wlGroup").value==="region";
+  $("wlBios").disabled = plainRegion;
+  if(plainRegion) $("wlBios").checked = false;
+  $("wlBiosLbl").style.opacity = plainRegion ? .45 : 1;
+  $("wlBiosLbl").title = plainRegion ? "Bios belong to producers \u2014 choose a producer grouping to include them." : "";
 }
 async function wlLoadTemplates(keepId){
   try{ window._wlTpls = await fetchAll("wine_list_templates","id,name,config","name"); }
@@ -1662,9 +1686,11 @@ function wlApplyTemplate(){
   const c=t.config||{};
   $("wlTitle").value=c.title||"Wine List";
   $("wlBasis").value=c.basis||"dp";
+  $("wlGroup").value=c.group||"region";
+  wlGroupChanged();
   $("wlStock").checked=c.instock!==false;
   $("wlBottle").checked=c.perbottle!==false;
-  $("wlBios").checked=!!c.bios;
+  $("wlBios").checked=!!c.bios && $("wlGroup").value!=="region";
   wlRegions.sel.length=0;
   (c.regions||[]).forEach(r=>wlRegions.sel.push({key:r,label:r}));
   wlRegions.render();
@@ -1678,6 +1704,7 @@ function wlApplyTemplate(){
 function wlConfig(){
   wlRegions.sweep();
   return { title:$("wlTitle").value.trim()||"Wine List", basis:$("wlBasis").value,
+    group:$("wlGroup").value,
     instock:$("wlStock").checked, perbottle:$("wlBottle").checked, bios:$("wlBios").checked,
     customer_id: wlCustSel?wlCustSel.id:null, regions: wlRegions.sel.map(c=>c.key) };
 }
@@ -1722,38 +1749,41 @@ async function wlGenerate(){
   const dutyOf=p=>dutyCats[p.duty_category_id]?Number(dutyCats[p.duty_category_id].duty_per_case):0;
   const priceDP=p=>Number(p.case_price)*disc;
   const priceIB=p=>Math.max(0,Number(p.case_price)-dutyOf(p))*disc;
-  const groups={};
-  rows.forEach(p=>{ const r=tagOf(p)||"Other"; (groups[r]=groups[r]||[]).push(p); });
-  const basis=cfg.basis, showBtl=cfg.perbottle;
-  let priceHead = basis==="both"
-    ? `<th class="r">In bond €/case</th><th class="r">Duty paid €/case</th>${showBtl?'<th class="r">Duty paid €/btl</th>':""}`
-    : `<th class="r">€ per case</th>${showBtl?'<th class="r">€ per bottle</th>':""}`;
+  const groupMode = cfg.group||"region";
+  const OTHER = "Other producers";
+  const supOf = p => supn[p.supplier_id] || OTHER;
+  const rowOf = p => {
+    const perCase = basis==="ib"?priceIB(p):priceDP(p);
+    const cells = basis==="both"
+      ? `<td class="r">${eur(priceIB(p))}</td><td class="r">${eur(priceDP(p))}</td>${showBtl?`<td class="r">${eur(priceDP(p)/p.bottles_in_case)}</td>`:""}`
+      : `<td class="r">${eur(perCase)}</td>${showBtl?`<td class="r">${eur(perCase/p.bottles_in_case)}</td>`:""}`;
+    return `<tr><td class="dim">${p.id}</td><td>${esc(p.name)}</td><td class="dim">${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml</td>${cells}</tr>`;
+  };
+  const tableOf = list => `<table><thead><tr><th>Code</th><th>Wine</th><th>Case</th>${priceHead}</tr></thead><tbody>${
+    list.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(rowOf).join("")}</tbody></table>`;
+  const bySup = list => {
+    const g={}; list.forEach(p=>{ const s=supOf(p); (g[s]=g[s]||[]).push(p); });
+    return Object.keys(g).sort((a,b)=> a===OTHER?1 : b===OTHER?-1 : a.localeCompare(b)).map(s=>[s,g[s]]);
+  };
+  const supSection = (name, list, level) => {
+    let h = level===2 ? `<h2 class="prodh">${esc(name)}</h2>` : `<h3>${esc(name)}</h3>`;
+    const b = (window._supAll||[]).find(s=>s.name===name);
+    if(cfg.bios && name!==OTHER && b && b.bio) h += `<p class="bio">${esc(b.bio)}</p>`;
+    return h + tableOf(list);
+  };
   let html="";
-  Object.keys(groups).sort().forEach(reg=>{
-    html+=`<h2>${esc(reg)}</h2>`;
-    const list=groups[reg].sort((a,b)=>{
-      const sa=supn[a.supplier_id]||"\uFFFF", sb=supn[b.supplier_id]||"\uFFFF";
-      return cfg.bios && sa!==sb ? sa.localeCompare(sb) : a.name.localeCompare(b.name);
+  if(groupMode==="supplier"){
+    bySup(rows).forEach(([s,list])=> html += supSection(s,list,2));
+  } else if(groupMode==="region_supplier"){
+    const regs={}; rows.forEach(p=>{ const r=tagOf(p)||"Other"; (regs[r]=regs[r]||[]).push(p); });
+    Object.keys(regs).sort().forEach(reg=>{
+      html += `<h2>${esc(reg)}</h2>`;
+      bySup(regs[reg]).forEach(([s,list])=> html += supSection(s,list,3));
     });
-    let lastSup=null, body="";
-    list.forEach(p=>{
-      if(cfg.bios && p.supplier_id!==lastSup){
-        lastSup=p.supplier_id;
-        const sn=supn[p.supplier_id];
-        if(sn){
-          if(body){ html+=`<table><thead><tr><th>Code</th><th>Wine</th><th>Case</th>${priceHead}</tr></thead><tbody>${body}</tbody></table>`; body=""; }
-          html+=`<h3>${esc(sn)}</h3>`;
-          if(supbio[p.supplier_id]) html+=`<p class="bio">${esc(supbio[p.supplier_id])}</p>`;
-        }
-      }
-      const perCase = basis==="ib"?priceIB(p):priceDP(p);
-      let cells = basis==="both"
-        ? `<td class="r">${eur(priceIB(p))}</td><td class="r">${eur(priceDP(p))}</td>${showBtl?`<td class="r">${eur(priceDP(p)/p.bottles_in_case)}</td>`:""}`
-        : `<td class="r">${eur(perCase)}</td>${showBtl?`<td class="r">${eur(perCase/p.bottles_in_case)}</td>`:""}`;
-      body+=`<tr><td class="dim">${p.id}</td><td>${esc(p.name)}</td><td class="dim">${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml</td>${cells}</tr>`;
-    });
-    if(body) html+=`<table><thead><tr><th>Code</th><th>Wine</th><th>Case</th>${priceHead}</tr></thead><tbody>${body}</tbody></table>`;
-  });
+  } else {
+    const regs={}; rows.forEach(p=>{ const r=tagOf(p)||"Other"; (regs[r]=regs[r]||[]).push(p); });
+    Object.keys(regs).sort().forEach(reg=>{ html += `<h2>${esc(reg)}</h2>` + tableOf(regs[reg]); });
+  }
   const today=new Date().toLocaleDateString("en-IE",{day:"numeric",month:"long",year:"numeric"});
   const basisNote = basis==="ib" ? "In-bond prices exclude excise duty; duty and VAT apply on release from bond."
     : basis==="both" ? "In-bond prices exclude excise duty; duty and VAT apply on release from bond. Duty-paid prices include excise duty."
@@ -1766,8 +1796,9 @@ async function wlGenerate(){
     .co{font-size:9pt;color:#555;text-align:right;line-height:1.4}
     .sub{margin-bottom:1.4em;color:#555;font-size:10pt;font-style:italic}
     h2{font-size:13pt;color:#5C1A2E;margin:1.3em 0 .35em;border-bottom:1px solid #e5ddd2;padding-bottom:.15em}
-    h3{font-size:10.5pt;margin:.9em 0 .1em}
-    .bio{font-size:9pt;color:#666;font-style:italic;margin:.1em 0 .4em;max-width:16cm}
+    h2.prodh{border-bottom:none;font-size:13.5pt;margin:1.4em 0 .1em}
+    h3{font-size:11.5pt;color:#5C1A2E;margin:1.1em 0 .05em;font-weight:700}
+    .bio{font-size:9.5pt;color:#444;margin:.15em 0 .5em;max-width:16.5cm;line-height:1.45}
     table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:.5em}
     th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#888;text-align:left;border-bottom:1px solid #d8cfc2;padding:.25em .4em}
     td{padding:.22em .4em;border-bottom:1px solid #f0e9df}
@@ -1788,77 +1819,52 @@ async function wlGenerate(){
 }
 
 /* ==================== DELIVERY NOTES ==================== */
-let dnInited=false, dnCustSel=null;
-async function dnInit(){
-  await ensureCustomers();
-  if(dnInited){ renderDns(); return; }
-  dnInited=true;
-  $("dnDate").value=new Date().toISOString().slice(0,10);
-  $("dnCust").addEventListener("change",()=>{
-    const v=$("dnCust").value.trim().toLowerCase();
-    dnCustSel=(window._rpCust||[]).find(c=>c.name.toLowerCase()===v)||null;
-    if(dnCustSel){
-      $("dnAddr").value=[dnCustSel.name,dnCustSel.address1,dnCustSel.address2,dnCustSel.address3,dnCustSel.address4,dnCustSel.eircode]
-        .filter(x=>x&&String(x).trim()).join("\n");
-    }
-  });
-  $("dnAddLine").onclick=()=>addDnLine();
-  addDnLine();
-  $("dnSave").onclick=saveDn;
-  renderDns();
+/* Delivery notes are created ONLY from an invoice or draft (dnFromInvoice,
+   launched from the invoice modal). The Delivery notes tab just lists them. */
+async function dnInit(){ renderDns(); }
+
+function dnFromInvoice(){
+  const cur = window._curInv; if(!cur) return;
+  const {inv, lines} = cur;
+  window._dnSrc = cur;
+  $("dnmInv").textContent = (inv.status==="draft"?"draft ":"invoice ")+inv.id;
+  const c = inv.customers||{};
+  $("dnmAddr").value = [c.name,c.address1,c.address2,c.address3,c.address4,c.eircode]
+    .filter(x=>x&&String(x).trim()).join("\n");
+  $("dnmDate").value = new Date().toISOString().slice(0,10);
+  $("dnmRef").value = (inv.status==="draft"?"DRAFT ":"INV ")+inv.id+(inv.cust_order_no?" / order "+inv.cust_order_no:"");
+  $("dnmComment").value = inv.delivery_comment||"";
+  $("dnmLines").innerHTML = (lines||[]).map((l,i)=>`
+    <label style="display:flex;align-items:center;gap:.5rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)">
+      <input type="checkbox" class="dnmChk" data-i="${i}" checked style="width:auto">
+      <span>${esc(l.description)} <span class="dim">&mdash; ${l.qty} ${esc(l.unit||"")}</span></span>
+    </label>`).join("") || "<p class='dim'>No lines on this invoice.</p>";
+  const m=$("dnmMsg"); m.textContent=""; m.className="msg";
+  $("dnmWrap").style.display="block";
 }
-function addDnLine(){
-  const i=Date.now()+Math.random();
-  $("dnLines").insertAdjacentHTML("beforeend",`
-  <div style="display:grid;grid-template-columns:3fr 80px 120px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-dn="${i}">
-    <div><div class="picker"><input class="dnProd" placeholder="wine \u2014 pick from the list, or type anything&hellip;" autocomplete="off"><ul style="display:none"></ul></div></div>
-    <div><label>Qty</label><input class="dnQty" type="number" min="0" step="1" value="1"></div>
-    <div><label>Unit</label><select class="dnUnit"><option>Case</option><option>Bottle</option><option>Gift pack</option><option>Box</option></select></div>
-    <button onclick="this.closest('[data-dn]').remove()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">\u2715</button>
-  </div>`);
-  const div=$("dnLines").lastElementChild;
-  const inp=div.querySelector(".dnProd"), ul=inp.nextElementSibling;
-  inp.oninput=()=>{
-    inp.dataset.pid="";
-    const q=inp.value.trim().toLowerCase();
-    if(q.length<2){ul.style.display="none";return;}
-    const hits=products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,10);
-    if(!hits.length){ul.style.display="none";return;}
-    ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${p.id} \u2014 ${esc(p.name)} <span class="cs">(${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml)</span></li>`).join("");
-    ul.style.display="block";
-    ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
-      const p=products.find(x=>x.id==li.dataset.id);
-      inp.value=p.name; inp.dataset.pid=p.id; ul.style.display="none";
-    });
-  };
-}
-async function saveDn(){
-  const m=$("dnMsg"); m.className="msg";
+function dnmClose(){ $("dnmWrap").style.display="none"; }
+async function dnmSaveNote(){
+  const src = window._dnSrc; if(!src) return;
+  const {inv, lines} = src;
+  const m=$("dnmMsg"); m.className="msg";
   const fail=t=>{m.textContent=t;m.className="msg err";};
-  const addr=$("dnAddr").value.trim();
-  if(!addr) return fail("Fill in the deliver-to address (picking a customer fills it in).");
-  const lines=[...document.querySelectorAll("#dnLines [data-dn]")].map(div=>({
-    pid:+div.querySelector(".dnProd").dataset.pid||null,
-    desc:div.querySelector(".dnProd").value.trim(),
-    qty:+div.querySelector(".dnQty").value||0,
-    unit:div.querySelector(".dnUnit").value,
-  })).filter(l=>l.desc&&l.qty>0);
-  if(!lines.length) return fail("Add at least one line with a description and quantity.");
-  $("dnSave").disabled=true;
+  const picked=[...document.querySelectorAll("#dnmLines .dnmChk")].filter(c=>c.checked).map(c=>lines[+c.dataset.i]);
+  if(!picked.length) return fail("Tick at least one line \u2014 a delivery note with no goods delivers nothing.");
+  const addr=$("dnmAddr").value.trim();
+  if(!addr) return fail("Fill in the deliver-to address.");
+  $("dnmSave").disabled=true;
   const {data:note, error:e1}=await db.from("delivery_notes").insert({
-    note_date:$("dnDate").value, customer_id:dnCustSel?dnCustSel.id:null,
-    deliver_to:addr, reference:$("dnRef").value.trim()||null, comment:$("dnComment").value.trim()||null
+    note_date:$("dnmDate").value, customer_id:inv.customer_id||null, invoice_id:inv.id,
+    deliver_to:addr, reference:$("dnmRef").value.trim()||null, comment:$("dnmComment").value.trim()||null
   }).select().single();
-  if(e1){ $("dnSave").disabled=false; return fail("Not saved — "+e1.message+" (has bundle_a.sql been run?)"); }
-  const {error:e2}=await db.from("delivery_note_lines").insert(lines.map(l=>({
-    note_id:note.id, product_id:l.pid, description:l.desc, qty:l.qty, unit:l.unit})));
-  $("dnSave").disabled=false;
-  if(e2) return fail("Header saved but lines failed — "+e2.message);
+  if(e1){ $("dnmSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_a2.sql been run?)"); }
+  const {error:e2}=await db.from("delivery_note_lines").insert(picked.map(l=>({
+    note_id:note.id, product_id:l.product_id||null, description:l.description, qty:l.qty, unit:l.unit||null})));
+  $("dnmSave").disabled=false;
+  if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
   m.textContent="Delivery note DN-"+note.id+" saved."; m.className="msg ok";
   printDn(note.id);
-  $("dnLines").innerHTML=""; addDnLine();
-  $("dnRef").value=""; $("dnComment").value="";
-  renderDns();
+  if($("viewDelNotes").style.display!=="none") renderDns();
 }
 async function renderDns(){
   let data;
