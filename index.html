@@ -151,18 +151,17 @@
     </div>
     <div class="tools">
       <input type="search" id="ckSearch" placeholder="Search wines, codes, regions…">
-      <select id="ckSort" style="max-width:240px">
-        <option value="cover">Sort: weeks of cover (low first)</option>
-        <option value="v90">Sort: 90-day sales (high first)</option>
-        <option value="mpct">Sort: margin % (high first)</option>
-        <option value="meur">Sort: margin € /case (high first)</option>
-        <option value="stock">Sort: stock (high first)</option>
-        <option value="name">Sort: name</option>
-      </select>
+      <span class="dim" style="font-size:.78rem">click any column heading to sort · click again to flip</span>
       <span class="count" id="ckCount"></span>
     </div>
     <div class="wrap"><table>
-      <thead><tr><th>Code</th><th>Wine</th><th>Region</th><th class="num">Stock (btls)</th><th class="num">90-day sales</th><th class="num">Weeks cover</th><th class="num">Cost €/case</th><th class="num">Price €/case</th><th class="num">Margin €</th><th class="num">Margin %</th></tr></thead>
+      <thead><tr id="ckHead">
+        <th data-k="pid" style="cursor:pointer">Code</th><th data-k="name" style="cursor:pointer">Wine</th>
+        <th data-k="tag" style="cursor:pointer">Region</th><th data-k="s" class="num" style="cursor:pointer">Stock (btls)</th>
+        <th data-k="v" class="num" style="cursor:pointer">90-day sales</th><th data-k="cover" class="num" style="cursor:pointer">Weeks cover</th>
+        <th data-k="cost" class="num" style="cursor:pointer">Cost €/case</th><th data-k="price" class="num" style="cursor:pointer">Price €/case</th>
+        <th data-k="meur" class="num" style="cursor:pointer">Margin €</th><th data-k="mpct" class="num" style="cursor:pointer">Margin %</th>
+      </tr></thead>
       <tbody id="ckBody"></tbody>
     </table></div>
   </div>
@@ -1441,13 +1440,26 @@ async function loadCockpit(){
   $("ckLow").textContent=low;
   renderCockpit();
 }
+window._ckSort = {k:"cover", dir:1};
+function ckSortBy(k){
+  const s=window._ckSort;
+  if(s.k===k) s.dir=-s.dir;
+  else { s.k=k; s.dir = (k==="name"||k==="tag"||k==="pid"||k==="cover") ? 1 : -1; }
+  renderCockpit();
+}
 function renderCockpit(){
   const q=$("ckSearch").value.trim().toLowerCase();
-  const sort=$("ckSort").value;
   let rows=ckRows.filter(r=>!q||r.name.toLowerCase().includes(q)||String(r.pid).includes(q)||r.tag.toLowerCase().includes(q));
-  const cmp={cover:(a,b)=>a.cover-b.cover, v90:(a,b)=>b.v-a.v, mpct:(a,b)=>b.mpct-a.mpct,
-             meur:(a,b)=>b.meur-a.meur, stock:(a,b)=>b.s-a.s, name:(a,b)=>a.name.localeCompare(b.name)}[sort];
-  rows.sort(cmp);
+  const {k,dir}=window._ckSort;
+  rows.sort((a,b)=>{
+    const av=a[k], bv=b[k];
+    const c = (typeof av==="string") ? av.localeCompare(bv) : (av===bv?0:(av<bv?-1:1));
+    return c*dir;
+  });
+  document.querySelectorAll("#ckHead th").forEach(th=>{
+    const base=th.textContent.replace(/ [▲▼]$/,"");
+    th.textContent = base + (th.dataset.k===k ? (dir===1?" ▲":" ▼") : "");
+  });
   $("ckBody").innerHTML = rows.slice(0,400).map(r=>{
     const coverTxt = r.cover===Infinity ? "∞" : r.cover.toFixed(1);
     const flag = (r.v>0 && r.s<=0) ? " style='background:#F7E3E3'" : (r.cover<4 && r.v>0 ? " style='background:var(--bond-bg)'" : "");
@@ -1462,7 +1474,7 @@ function renderCockpit(){
   $("ckCount").textContent = rows.length>400 ? "showing 400 of "+rows.length : rows.length+" wines";
 }
 $("ckSearch").oninput=renderCockpit;
-$("ckSort").onchange=renderCockpit;
+document.querySelectorAll("#ckHead th").forEach(th=>th.onclick=()=>ckSortBy(th.dataset.k));
 
 init();
 </script>
