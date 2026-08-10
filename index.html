@@ -1779,7 +1779,9 @@ async function wlGenerate(){
   <div class="head"><h1>Moores&rsquo; Wines</h1><div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
   <div class="sub">${esc(cfg.title)} &mdash; ${today}${wlCustSel?" &mdash; prepared for "+esc(wlCustSel.name):""}</div>
   ${html}
-  <div class="foot">${basisNote} All prices in euro, exclusive of VAT unless stated. Subject to remaining unsold &mdash; E&amp;OE.</div>
+  <div class="foot">${basisNote} All prices in euro and exclude VAT @ 23%. Title to goods is retained until all goods are paid for. Terms 30 days from month end. Subject to remaining unsold &mdash; E&amp;OE.<br>
+  To order, contact Catherine Sherry &middot; 087 676 4775 / 01 296 5297 &middot; catherine@mooreswines.ie<br>
+  Moores&rsquo; Wines Limited, 98 Lower Baggot Street, Dublin 2 &middot; www.mooreswines.ie</div>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
   m.textContent=rows.length+" wines on the list."; m.className="msg ok";
@@ -1926,7 +1928,8 @@ async function printDn(id){
     <div>Signature</div>
     <div>Date</div>
   </div>
-  <div class="foot">Goods remain the property of Moores&rsquo; Wines until paid for in full. This note carries no prices and is not an invoice.</div>
+  <div class="foot">Goods remain the property of Moores&rsquo; Wines until paid for in full. This note carries no prices and is not an invoice.<br>
+  Queries: Catherine Sherry &middot; 087 676 4775 / 01 296 5297 &middot; catherine@mooreswines.ie &middot; Moores&rsquo; Wines Limited, 98 Lower Baggot Street, Dublin 2</div>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }
