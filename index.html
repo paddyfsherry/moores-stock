@@ -117,7 +117,7 @@
   <button data-view="cockpit" class="active">Cockpit</button>
   <button data-view="newinv">Sales</button>
   <button data-view="stock">Stock</button>
-  <button data-view="products">Products</button>
+  <button data-view="products">Catalogue</button>
   <button data-view="reports">Reports</button>
 </nav>
 <div id="stockSub" style="display:none;background:var(--paper);padding:.5rem 1.2rem;gap:.4rem;border-bottom:1px solid var(--line)">
@@ -1985,8 +1985,8 @@ async function soInit(){
 function addSoLine(){
   const i=Date.now()+Math.random();
   $("soLines").insertAdjacentHTML("beforeend",`
-  <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;align-items:center;margin:.25rem 0" data-so="${i}">
-    <div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div>
+  <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;align-items:start;margin:.25rem 0" data-so="${i}">
+    <div><div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="soCap" style="font-size:.72rem;color:#9A8F84;margin-top:2px;min-height:0"></div></div>
     <input class="soQty" type="number" min="0" step="1" value="">
     <select class="soUnit"><option>Case</option><option>Bottle</option></select>
     <input class="soPrice" type="number" min="0" step="0.01" value="">
@@ -2005,7 +2005,8 @@ function addSoLine(){
     ul.style.display="block";
     ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
       const p=products.find(x=>x.id==li.dataset.id);
-      inp.value=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      inp.value=p.name; inp.title=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      div.querySelector(".soCap").textContent = p.id+" \u00B7 "+p.bottles_in_case+"\u00D7"+p.bottle_size_ml+"ml \u00B7 list \u20AC"+eur(p.case_price)+"/case";
       if(!+div.querySelector(".soQty").value) div.querySelector(".soQty").value=1;
       soSetLinePrice(div,p); soLineTotal(div);
     });
@@ -2161,8 +2162,8 @@ async function poInit(){
 function addPoLine(){
   const i=Date.now()+Math.random();
   $("poLines").insertAdjacentHTML("beforeend",`
-  <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;align-items:center;margin:.25rem 0" data-po="${i}">
-    <div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div>
+  <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;align-items:start;margin:.25rem 0" data-po="${i}">
+    <div><div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="poCap" style="font-size:.72rem;color:#9A8F84;margin-top:2px;min-height:0"></div></div>
     <input class="poCases" type="number" min="0" step="1" value="">
     <input class="poCost" type="number" min="0" step="0.01" value="">
     <input class="poExp" type="date">
@@ -2181,8 +2182,10 @@ function addPoLine(){
     ul.style.display="block";
     ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
       const p=products.find(x=>x.id==li.dataset.id);
-      inp.value=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      inp.value=p.name; inp.title=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      div.querySelector(".poCap").textContent = p.id+" \u00B7 "+p.bottles_in_case+"\u00D7"+p.bottle_size_ml+"ml \u00B7 catalogue cost \u20AC"+eur(p.case_cost);
       if(!+div.querySelector(".poCases").value) div.querySelector(".poCases").value=1;
+      if(!+div.querySelector(".poCost").value && Number(p.case_cost)>0) div.querySelector(".poCost").value=Number(p.case_cost).toFixed(2);
       poLineTotal(div);
     });
   };
