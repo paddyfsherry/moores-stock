@@ -124,9 +124,11 @@
   <button data-sub="onhand" class="active" onclick="showStockSub('onhand')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">On hand</button>
   <button data-sub="move" onclick="showStockSub('move')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Movements</button>
   <button data-sub="recon" onclick="showStockSub('recon')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Reconcile</button>
+  <button data-sub="po" onclick="showStockSub('po')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Purchase orders</button>
 </div>
 <style>#stockSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
 <div id="salesSub" style="display:none;background:var(--paper);padding:.5rem 1.2rem;gap:.4rem;border-bottom:1px solid var(--line)">
+  <button data-ssub="so" onclick="showSalesSub('so')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Orders</button>
   <button data-ssub="inv" class="active" onclick="showSalesSub('inv')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Invoices</button>
   <button data-ssub="lists" onclick="showSalesSub('lists')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Wine lists</button>
   <button data-ssub="dn" onclick="showSalesSub('dn')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Delivery notes</button>
@@ -255,6 +257,37 @@
     </div>
   </div>
 
+  <!-- ========== SALES ORDERS ========== -->
+  <div id="viewSalesOrders" class="view" style="display:none">
+    <div class="panel">
+      <h2>New sales order</h2>
+      <p class="hint">The front door: an order comes in, gets recorded here, becomes a draft invoice when it ships (whole or in parts), and the invoice makes the delivery note. Prices carry the customer&rsquo;s discount.</p>
+      <div class="grid3">
+        <div><label for="soCust">Customer</label><input id="soCust" list="rpCustList" placeholder="start typing&hellip;" autocomplete="off"></div>
+        <div><label for="soDate">Date</label><input id="soDate" type="date"></div>
+        <div><label for="soOrderNo">Customer order no. <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="soOrderNo"></div>
+      </div>
+      <div class="chosen" id="soCustInfo"></div>
+      <label>Lines</label>
+      <div id="soLines"></div>
+      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="soAddLine">+ add line</button>
+      <div class="grid2" style="margin-top:.6rem">
+        <div><label for="soComment">Comment <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="soComment" placeholder="e.g. deliver w/c 24th, ring first"></div>
+        <div style="text-align:right;align-self:end">
+          <div style="font-family:'Libre Caslon Text',serif;font-size:1.05rem" id="soTotals">Net &euro;0.00</div>
+        </div>
+      </div>
+      <button class="btn" id="soSave">Save order</button>
+      <div class="msg" id="soMsg"></div>
+    </div>
+    <div class="panel">
+      <h2>Sales orders</h2>
+      <label style="display:flex;align-items:center;gap:.4rem;margin:0 0 .5rem;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="soShowDone" style="width:auto"> show invoiced &amp; cancelled too</label>
+      <div class="wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Order no.</th><th class="num">Net &euro;</th><th>Status</th><th></th></tr></thead>
+      <tbody id="soList"></tbody></table></div>
+    </div>
+  </div>
+
   <!-- ========== NEW INVOICE (DRAFT) ========== -->
   <div id="viewNewInv" class="view" style="display:none">
     <div class="panel">
@@ -322,6 +355,101 @@
       <button class="btn" id="wlSaveTpl" style="background:#7A6E63">Save as template</button>
       <button class="btn" id="wlDelTpl" style="background:none;color:var(--neg);border:1px solid var(--line);display:none">Delete template</button>
       <div class="msg" id="wlMsg"></div>
+    </div>
+  </div>
+
+  <!-- ========== PURCHASE ORDERS ========== -->
+  <div id="viewPO" class="view" style="display:none">
+    <div class="panel">
+      <h2>New purchase order</h2>
+      <p class="hint">Wine on order: what&rsquo;s coming, from whom, at what cost. Receiving against the order posts real stock movements &mdash; the outstanding balance is what&rsquo;s still afloat.</p>
+      <div class="grid3">
+        <div><label for="poSup">Supplier</label><select id="poSup"></select></div>
+        <div><label for="poDate">Order date</label><input id="poDate" type="date"></div>
+        <div><label for="poRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poRef" placeholder="supplier order / proforma no."></div>
+      </div>
+      <div class="grid3">
+        <div><label for="poExpected">Expected delivery <span style="text-transform:none;font-weight:400">(whole order &mdash; lines can differ)</span></label><input id="poExpected" type="date"></div>
+        <div style="display:flex;gap:1rem;align-items:end;padding-bottom:.55rem">
+          <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="poTransit" style="width:auto"> in transit</label>
+        </div>
+        <div></div>
+      </div>
+      <label>Lines <span style="text-transform:none;font-weight:400">(cost per case, ex-cellar; expected date only if it differs from the order&rsquo;s)</span></label>
+      <div id="poLines"></div>
+      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="poAddLine">+ add line</button>
+      <div class="grid2" style="margin-top:.6rem">
+        <div><label for="poComment">Comment <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poComment"></div>
+        <div style="text-align:right;align-self:end">
+          <div style="font-family:'Libre Caslon Text',serif;font-size:1.05rem" id="poTotals">Total &euro;0.00</div>
+        </div>
+      </div>
+      <button class="btn" id="poSave">Save purchase order</button>
+      <div class="msg" id="poMsg"></div>
+    </div>
+    <div class="panel">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2>Purchase orders</h2>
+        <button class="btn" style="margin-left:auto" onclick="rdOpen()">Receive delivery</button>
+      </div>
+      <p class="hint">One physical delivery, one screen &mdash; it lists every outstanding line across the supplier&rsquo;s open orders, however many POs the consignment settles.</p>
+      <label style="display:flex;align-items:center;gap:.4rem;margin:0 0 .5rem;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="poShowDone" style="width:auto"> show received &amp; cancelled too</label>
+      <div class="wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Reference</th><th class="num">Cases</th><th class="num">Outstanding</th><th>Status</th><th></th></tr></thead>
+      <tbody id="poList"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ========== SO -> DRAFT INVOICE MODAL ========== -->
+  <div id="soInvWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:70" onclick="if(event.target===this)soInvClose()">
+    <div style="background:var(--paper);max-width:620px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" style="font-size:1.15rem">Draft invoice from order <span id="soInvNo"></span></h2>
+        <button onclick="soInvClose()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .8rem">Untick anything not shipping yet &mdash; the order stays open for the rest and you can raise another invoice later.</p>
+      <div id="soInvLines" style="display:flex;flex-direction:column;gap:.25rem;margin:.2rem 0 .6rem"></div>
+      <button class="btn" id="soInvSaveBtn" onclick="soInvSave()">Create draft invoice</button>
+      <div class="msg" id="soInvMsg"></div>
+    </div>
+  </div>
+
+  <!-- ========== RECEIVE DELIVERY MODAL ========== -->
+  <div id="rdWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:70" onclick="if(event.target===this)rdClose()">
+    <div style="background:var(--paper);max-width:720px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" style="font-size:1.15rem">Receive a delivery</h2>
+        <button onclick="rdClose()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .8rem">Enter the cases that actually arrived &mdash; counted, not copied from paperwork &mdash; with the rotation numbers from the landing advice. Each line posts a receipt movement against its own PO.</p>
+      <div class="grid3">
+        <div><label for="rdSup">Supplier</label><select id="rdSup"></select></div>
+        <div><label for="rdDate">Received date</label><input id="rdDate" type="date"></div>
+        <div><label for="rdLoc">Into location</label><select id="rdLoc"></select></div>
+      </div>
+      <div id="rdLines" style="display:flex;flex-direction:column;gap:.3rem;margin:.4rem 0 .6rem"></div>
+      <button class="btn" id="rdSaveBtn" onclick="rdSave()">Post receipts</button>
+      <div class="msg" id="rdMsg"></div>
+    </div>
+  </div>
+
+  <!-- ========== PO PAYMENTS MODAL ========== -->
+  <div id="poPayWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:70" onclick="if(event.target===this)poPayClose()">
+    <div style="background:var(--paper);max-width:520px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <div style="display:flex;align-items:baseline;gap:1rem">
+        <h2 class="serif" style="font-size:1.15rem">Payments &mdash; <span id="poPayNo"></span></h2>
+        <button onclick="poPayClose()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .8rem">A memo, not a ledger &mdash; Sage keeps the books. This just answers &ldquo;what&rsquo;s on order and what have we paid for?&rdquo;</p>
+      <p id="poPaySummary" style="font-family:'Libre Caslon Text',serif;margin:.2rem 0 .6rem"></p>
+      <table><thead><tr><th>Date</th><th class="num">Amount &euro;</th><th>Note</th><th></th></tr></thead>
+      <tbody id="poPayList"></tbody></table>
+      <div class="grid3" style="margin-top:.6rem">
+        <div><label for="poPayDate">Date</label><input id="poPayDate" type="date"></div>
+        <div><label for="poPayAmt">Amount &euro;</label><input id="poPayAmt" type="number" min="0" step="0.01"></div>
+        <div><label for="poPayNote">Note <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poPayNote" placeholder="e.g. 50% deposit"></div>
+      </div>
+      <button class="btn" onclick="poPayAdd()">Record payment</button>
+      <div class="msg" id="poPayMsg"></div>
     </div>
   </div>
 
@@ -661,7 +789,7 @@ async function loadRefData(){
 document.querySelectorAll("#mainNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 function switchView(v){
   document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports"].forEach(x=>$(x).style.display="none");
+  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports","viewSalesOrders","viewPO"].forEach(x=>$(x).style.display="none");
   $("stockSub").style.display = v==="stock" ? "flex":"none";
   $("salesSub").style.display = v==="newinv" ? "flex":"none";
   if(v==="cockpit"){ $("viewCockpit").style.display="block"; loadCockpit(); }
@@ -677,8 +805,10 @@ function showStockSub(s){
   $("viewMove").style.display = s==="move"?"block":"none";
   $("viewHistory").style.display = s==="move"?"block":"none";
   $("viewRecon").style.display = s==="recon"?"block":"none";
+  $("viewPO").style.display = s==="po"?"block":"none";
   if(s==="onhand") loadStock();
   if(s==="move") loadHistory();
+  if(s==="po") poInit();
 }
 
 /* ==================== STOCK VIEW ==================== */
@@ -1581,9 +1711,11 @@ document.querySelectorAll("#ckHead th").forEach(th=>th.onclick=()=>ckSortBy(th.d
 function showSalesSub(s){
   window._salesSub=s;
   document.querySelectorAll("#salesSub button").forEach(b=>b.classList.toggle("active",b.dataset.ssub===s));
+  $("viewSalesOrders").style.display = s==="so" ?"block":"none";
   $("viewNewInv").style.display   = s==="inv"  ?"block":"none";
   $("viewWineLists").style.display= s==="lists"?"block":"none";
   $("viewDelNotes").style.display = s==="dn"   ?"block":"none";
+  if(s==="so") soInit();
   if(s==="inv") initNewInv();
   if(s==="lists") wlInit();
   if(s==="dn") dnInit();
@@ -1821,6 +1953,441 @@ async function wlGenerate(){
   <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
   m.textContent=rows.length+" wines on the list."; m.className="msg ok";
+}
+
+/* ==================== SALES ORDERS ==================== */
+let soInited=false, soCustomer=null;
+async function soInit(){
+  await ensureCustomers();
+  if(soInited){ renderSos(); return; }
+  soInited=true;
+  $("soDate").value=new Date().toISOString().slice(0,10);
+  $("soCust").addEventListener("change",()=>{
+    const v=$("soCust").value.trim().toLowerCase();
+    soCustomer=(window._rpCust||[]).find(c=>c.name.toLowerCase()===v)||null;
+    $("soCustInfo").textContent = soCustomer
+      ? soCustomer.name+(soCustomer.discount_pct>0?" \u2014 "+soCustomer.discount_pct+"% discount applies":"")
+      : "";
+    soRefreshPrices();
+  });
+  $("soAddLine").onclick=()=>addSoLine();
+  addSoLine();
+  $("soSave").onclick=saveSo;
+  $("soShowDone").onchange=renderSos;
+  renderSos();
+}
+function addSoLine(){
+  const i=Date.now()+Math.random();
+  $("soLines").insertAdjacentHTML("beforeend",`
+  <div style="display:grid;grid-template-columns:3fr 70px 100px 110px 110px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-so="${i}">
+    <div><div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div></div>
+    <div><label>Qty</label><input class="soQty" type="number" min="0" step="1" value="1"></div>
+    <div><label>Unit</label><select class="soUnit"><option>Case</option><option>Bottle</option></select></div>
+    <div><label>Price \u20AC</label><input class="soPrice" type="number" min="0" step="0.01" value="0"></div>
+    <div><label>Total \u20AC</label><input class="soTot" disabled value="0.00" style="background:var(--paper)"></div>
+    <button onclick="this.closest('[data-so]').remove();soTotals()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">\u2715</button>
+  </div>`);
+  const div=$("soLines").lastElementChild;
+  const inp=div.querySelector(".soProd"), ul=inp.nextElementSibling;
+  inp.oninput=()=>{
+    inp.dataset.pid="";
+    const q=inp.value.trim().toLowerCase();
+    if(q.length<2){ul.style.display="none";return;}
+    const hits=products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,10);
+    ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${p.id} \u2014 ${esc(p.name)} <span class="cs">(\u20AC${eur(p.case_price)}/case)</span></li>`).join("")||"<li class='dim'>No match</li>";
+    ul.style.display="block";
+    ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+      const p=products.find(x=>x.id==li.dataset.id);
+      inp.value=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      soSetLinePrice(div,p); soLineTotal(div);
+    });
+  };
+  div.querySelector(".soQty").oninput=()=>soLineTotal(div);
+  div.querySelector(".soPrice").oninput=()=>soLineTotal(div);
+  div.querySelector(".soUnit").onchange=()=>{
+    const p=products.find(x=>x.id==+inp.dataset.pid); if(p) soSetLinePrice(div,p);
+    soLineTotal(div);
+  };
+}
+function soSetLinePrice(div,p){
+  const disc = soCustomer&&soCustomer.discount_pct>0 ? (1-soCustomer.discount_pct/100) : 1;
+  const unit = div.querySelector(".soUnit").value;
+  const base = unit==="Case" ? p.case_price : p.case_price/p.bottles_in_case;
+  div.querySelector(".soPrice").value=(base*disc).toFixed(2);
+}
+function soRefreshPrices(){
+  document.querySelectorAll("#soLines [data-so]").forEach(div=>{
+    const p=products.find(x=>x.id==+div.querySelector(".soProd").dataset.pid);
+    if(p){ soSetLinePrice(div,p); soLineTotal(div); }
+  });
+}
+function soLineTotal(div){
+  const q=+div.querySelector(".soQty").value||0, pr=+div.querySelector(".soPrice").value||0;
+  div.querySelector(".soTot").value=(q*pr).toFixed(2);
+  soTotals();
+}
+function soTotals(){
+  let net=0;
+  document.querySelectorAll("#soLines .soTot").forEach(t=>net+=+t.value||0);
+  $("soTotals").innerHTML="Net \u20AC"+eur(net);
+  return net;
+}
+async function saveSo(){
+  const m=$("soMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  if(!soCustomer) return fail("Pick a customer from the list first.");
+  const lines=[...document.querySelectorAll("#soLines [data-so]")].map(div=>({
+    pid:+div.querySelector(".soProd").dataset.pid||null,
+    desc:div.querySelector(".soProd").value.replace(/^\d+ \u2014 /,""),
+    qty:+div.querySelector(".soQty").value||0,
+    unit:div.querySelector(".soUnit").value,
+    price:+div.querySelector(".soPrice").value||0,
+  })).filter(l=>l.pid&&l.qty>0);
+  if(!lines.length) return fail("Add at least one line with a wine and quantity.");
+  $("soSave").disabled=true;
+  const {data:so, error:e1}=await db.from("sales_orders").insert({
+    order_date:$("soDate").value, customer_id:soCustomer.id,
+    cust_order_no:$("soOrderNo").value.trim()||null, comment:$("soComment").value.trim()||null,
+    status:"open"}).select().single();
+  if(e1){ $("soSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_b1.sql been run?)"); }
+  const {error:e2}=await db.from("sales_order_lines").insert(lines.map(l=>({
+    so_id:so.id, product_id:l.pid, description:l.desc, qty:l.qty, unit:l.unit, case_price:l.price})));
+  $("soSave").disabled=false;
+  if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
+  m.textContent="Order SO-"+so.id+" saved."; m.className="msg ok";
+  $("soLines").innerHTML=""; addSoLine(); $("soOrderNo").value=""; $("soComment").value=""; soTotals();
+  renderSos();
+}
+const soStatusTag = s => ({open:"<span class='tag bond'>OPEN</span>",
+  part_invoiced:"<span class='tag' style='background:#B08D2E;color:#fff'>PART INVOICED</span>",
+  invoiced:"<span class='tag paid'>INVOICED</span>",
+  cancelled:"<span class='tag' style='background:#999;color:#fff'>CANCELLED</span>"}[s]||esc(s));
+async function renderSos(){
+  const showDone=$("soShowDone").checked;
+  let q=db.from("sales_orders").select("id,order_date,cust_order_no,status,customers(name),sales_order_lines(qty,case_price,qty_invoiced)").order("id",{ascending:false}).limit(80);
+  if(!showDone) q=q.in("status",["open","part_invoiced"]);
+  const {data,error}=await q;
+  if(error){ $("soList").innerHTML="<tr><td colspan=7 class='dim'>Couldn\u2019t load orders \u2014 "+esc(error.message)+" (has bundle_b1.sql been run?)</td></tr>"; return; }
+  $("soList").innerHTML=(data||[]).map(o=>{
+    const net=(o.sales_order_lines||[]).reduce((s,l)=>s+Number(l.qty)*Number(l.case_price),0);
+    const open=o.status==="open"||o.status==="part_invoiced";
+    return `<tr>
+    <td>SO-${o.id}</td><td class="dim">${o.order_date}</td><td>${esc(o.customers?.name||"")}</td>
+    <td class="dim">${esc(o.cust_order_no||"")}</td><td class="num">${eur(net)}</td><td>${soStatusTag(o.status)}</td>
+    <td style="white-space:nowrap">${open?`<button onclick="soMakeInv(${o.id})" style="border:none;background:var(--claret);color:#F6EDE4;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Invoice</button>
+      <button onclick="soCancel(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Cancel</button>`:""}</td></tr>`;
+  }).join("")||"<tr><td colspan=7 class='dim'>No orders yet.</td></tr>";
+}
+async function soCancel(id){
+  if(!confirm("Cancel order SO-"+id+"?")) return;
+  await db.from("sales_orders").update({status:"cancelled"}).eq("id",id);
+  renderSos();
+}
+async function soMakeInv(id){
+  const {data:so}=await db.from("sales_orders")
+    .select("*, customers(name,discount_pct), sales_order_lines(*)").eq("id",id).single();
+  if(!so) return;
+  window._soSrc=so;
+  $("soInvNo").textContent="SO-"+so.id+" \u2014 "+(so.customers?.name||"");
+  $("soInvLines").innerHTML=(so.sales_order_lines||[]).map((l,i)=>{
+    const left=Number(l.qty)-Number(l.qty_invoiced||0);
+    return `<label style="display:flex;align-items:center;gap:.5rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink);${left<=0?"opacity:.4":""}">
+      <input type="checkbox" class="soInvChk" data-i="${i}" ${left>0?"checked":"disabled"} style="width:auto">
+      <span>${esc(l.description)} <span class="dim">\u2014 ${left} of ${l.qty} ${esc(l.unit||"")} still to invoice @ \u20AC${eur(l.case_price)}</span></span>
+    </label>`;
+  }).join("")||"<p class='dim'>No lines.</p>";
+  const m=$("soInvMsg"); m.textContent=""; m.className="msg";
+  $("soInvWrap").style.display="block";
+}
+function soInvClose(){ $("soInvWrap").style.display="none"; }
+async function soInvSave(){
+  const so=window._soSrc; if(!so) return;
+  const m=$("soInvMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  const all=so.sales_order_lines||[];
+  const picked=[...document.querySelectorAll("#soInvLines .soInvChk")].filter(c=>c.checked).map(c=>all[+c.dataset.i]);
+  if(!picked.length) return fail("Tick at least one line.");
+  $("soInvSaveBtn").disabled=true;
+  const vatPct=23;
+  const inv_lines=picked.map(l=>{
+    const q=Number(l.qty)-Number(l.qty_invoiced||0);
+    return {product_id:l.product_id, description:l.description, qty:q, unit:l.unit,
+      case_price:Number(l.case_price), line_total:q*Number(l.case_price)};
+  });
+  const net=inv_lines.reduce((s,l)=>s+l.line_total,0), vat=net*vatPct/100;
+  const {data:mx}=await db.from("invoices").select("id").gte("id",900000).order("id",{ascending:false}).limit(1);
+  const nid=(mx&&mx.length?mx[0].id:900000)+1;
+  const {error:e1}=await db.from("invoices").insert({id:nid, customer_id:so.customer_id,
+    invoice_date:new Date().toISOString().slice(0,10), discount:0, net_total:net, vat:vat,
+    gross_total:net+vat, cust_order_no:so.cust_order_no||"", delivery_comment:so.comment||"", status:"draft"});
+  if(e1){ $("soInvSaveBtn").disabled=false; return fail("Draft not created \u2014 "+e1.message); }
+  const {error:e2}=await db.from("invoice_lines").insert(inv_lines.map(l=>({invoice_id:nid, product_id:l.product_id,
+    description:l.description, qty:l.qty, unit:l.unit, case_price:l.case_price, line_total:l.line_total, rotation_number:""})));
+  if(e2){ $("soInvSaveBtn").disabled=false; return fail("Draft header saved but lines failed \u2014 "+e2.message); }
+  for(const l of picked){
+    await db.from("sales_order_lines").update({qty_invoiced:Number(l.qty)}).eq("id",l.id);
+  }
+  const fully = all.every(l=> picked.some(p=>p.id===l.id) || Number(l.qty_invoiced||0)>=Number(l.qty));
+  await db.from("sales_orders").update({status: fully?"invoiced":"part_invoiced"}).eq("id",so.id);
+  $("soInvSaveBtn").disabled=false;
+  m.textContent="Draft "+nid+" created."; m.className="msg ok";
+  soInvClose(); renderSos(); openInvoice(nid);
+}
+
+/* ==================== PURCHASE ORDERS ==================== */
+let poInited=false;
+async function poInit(){
+  await ensureSuppliers();
+  if(poInited){ renderPos(); return; }
+  poInited=true;
+  $("poDate").value=new Date().toISOString().slice(0,10);
+  $("poSup").innerHTML='<option value="">\u2014 pick a supplier \u2014</option>'+
+    (window._supAll||[]).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  $("poAddLine").onclick=()=>addPoLine();
+  addPoLine();
+  $("poSave").onclick=savePo;
+  $("poShowDone").onchange=renderPos;
+  renderPos();
+}
+function addPoLine(){
+  const i=Date.now()+Math.random();
+  $("poLines").insertAdjacentHTML("beforeend",`
+  <div style="display:grid;grid-template-columns:3fr 80px 115px 150px 105px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-po="${i}">
+    <div><div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div></div>
+    <div><label>Cases</label><input class="poCases" type="number" min="0" step="1" value="1"></div>
+    <div><label>Cost/case \u20AC</label><input class="poCost" type="number" min="0" step="0.01" value="0"></div>
+    <div><label>Expected</label><input class="poExp" type="date"></div>
+    <div><label>Total \u20AC</label><input class="poTot" disabled value="0.00" style="background:var(--paper)"></div>
+    <button onclick="this.closest('[data-po]').remove();poTotals()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">\u2715</button>
+  </div>`);
+  const div=$("poLines").lastElementChild;
+  const inp=div.querySelector(".poProd"), ul=inp.nextElementSibling;
+  inp.oninput=()=>{
+    inp.dataset.pid="";
+    const q=inp.value.trim().toLowerCase();
+    if(q.length<2){ul.style.display="none";return;}
+    const hits=products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,10);
+    ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${p.id} \u2014 ${esc(p.name)} <span class="cs">(${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml)</span></li>`).join("")||"<li class='dim'>No match</li>";
+    ul.style.display="block";
+    ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
+      const p=products.find(x=>x.id==li.dataset.id);
+      inp.value=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      poLineTotal(div);
+    });
+  };
+  div.querySelector(".poCases").oninput=()=>poLineTotal(div);
+  div.querySelector(".poCost").oninput=()=>poLineTotal(div);
+}
+function poLineTotal(div){
+  const q=+div.querySelector(".poCases").value||0, c=+div.querySelector(".poCost").value||0;
+  div.querySelector(".poTot").value=(q*c).toFixed(2);
+  poTotals();
+}
+function poTotals(){
+  let t=0;
+  document.querySelectorAll("#poLines .poTot").forEach(x=>t+=+x.value||0);
+  $("poTotals").innerHTML="Total \u20AC"+eur(t);
+  return t;
+}
+async function savePo(){
+  const m=$("poMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  const supId=+$("poSup").value||null;
+  if(!supId) return fail("Pick the supplier.");
+  const lines=[...document.querySelectorAll("#poLines [data-po]")].map(div=>({
+    pid:+div.querySelector(".poProd").dataset.pid||null,
+    desc:div.querySelector(".poProd").value.replace(/^\d+ \u2014 /,""),
+    cases:+div.querySelector(".poCases").value||0,
+    cost:+div.querySelector(".poCost").value||0,
+    exp:div.querySelector(".poExp").value||null,
+  })).filter(l=>l.pid&&l.cases>0);
+  if(!lines.length) return fail("Add at least one line with a wine and case quantity.");
+  $("poSave").disabled=true;
+  const {data:po, error:e1}=await db.from("purchase_orders").insert({
+    order_date:$("poDate").value, supplier_id:supId, reference:$("poRef").value.trim()||null,
+    expected_date:$("poExpected").value||null,
+    in_transit:$("poTransit").checked, comment:$("poComment").value.trim()||null, status:"open"}).select().single();
+  if(e1){ $("poSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_b2.sql been run?)"); }
+  const {error:e2}=await db.from("purchase_order_lines").insert(lines.map(l=>({
+    po_id:po.id, product_id:l.pid, description:l.desc, cases:l.cases, case_cost:l.cost, expected_date:l.exp})));
+  $("poSave").disabled=false;
+  if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
+  m.textContent="Purchase order PO-"+po.id+" saved."; m.className="msg ok";
+  $("poLines").innerHTML=""; addPoLine();
+  $("poRef").value=""; $("poComment").value=""; $("poExpected").value="";
+  $("poTransit").checked=false; poTotals();
+  renderPos();
+}
+function poBic(pid){ const p=products.find(x=>x.id===pid); return p?p.bottles_in_case:12; }
+function poLineOut(l){ return Math.max(0, Number(l.cases)-Number(l.bottles_received||0)/poBic(l.product_id)); }
+const poChips = o => {
+  let c="";
+  const total=(o.purchase_order_lines||[]).reduce((s,l)=>s+Number(l.cases)*Number(l.case_cost),0);
+  const paid=(o.purchase_order_payments||[]).reduce((s,p)=>s+Number(p.amount),0);
+  if(total>0||paid>0){
+    const col = paid>=total&&total>0 ? "var(--claret)" : paid>0 ? "#B08D2E" : "#A03030";
+    c+=`<span class='tag' style='background:${col};color:#fff'>PAID \u20AC${eur(paid)} OF \u20AC${eur(total)}</span> `;
+  }
+  if(o.status==="open"||o.status==="part_received"){
+    const today=new Date().toISOString().slice(0,10);
+    const late=(o.purchase_order_lines||[]).some(l=>{
+      const d=l.expected_date||o.expected_date;
+      return poLineOut(l)>0 && d && d<today;
+    });
+    if(late) c+="<span class='tag' style='background:#A03030;color:#fff'>OVERDUE</span> ";
+    if(o.in_transit) c+="<span class='tag' style='background:#B08D2E;color:#fff'>IN TRANSIT</span> ";
+  }
+  const st={open:"OPEN",part_received:"PART RECEIVED",received:"RECEIVED",closed_short:"CLOSED SHORT",cancelled:"CANCELLED"}[o.status]||o.status;
+  c+="<span class='tag' style='background:#7A6E63;color:#fff'>"+st+"</span>";
+  return c;
+};
+async function renderPos(){
+  const showDone=$("poShowDone").checked;
+  let q=db.from("purchase_orders").select("*, suppliers(name), purchase_order_lines(id,product_id,description,cases,case_cost,bottles_received,expected_date), purchase_order_payments(id,amount)").order("id",{ascending:false}).limit(80);
+  if(!showDone) q=q.in("status",["open","part_received"]);
+  const {data,error}=await q;
+  if(error){ $("poList").innerHTML="<tr><td colspan=8 class='dim'>Couldn\u2019t load \u2014 "+esc(error.message)+" (has bundle_b2.sql been run?)</td></tr>"; return; }
+  window._poCache=data||[];
+  $("poList").innerHTML=(data||[]).map(o=>{
+    const totCases=(o.purchase_order_lines||[]).reduce((s,l)=>s+Number(l.cases),0);
+    const outCases=(o.purchase_order_lines||[]).reduce((s,l)=>s+poLineOut(l),0);
+    const open=o.status==="open"||o.status==="part_received";
+    const nothingIn=(o.purchase_order_lines||[]).every(l=>Number(l.bottles_received||0)===0);
+    let btns="";
+    if(open){
+      btns+=`<button onclick="poPayOpen(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Payments</button> `;
+      if(nothingIn) btns+=`<button onclick="poCancel(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Cancel</button>`;
+      else btns+=`<button onclick="poCloseShort(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Close short</button>`;
+    } else {
+      btns+=`<button onclick="poPayOpen(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Payments</button>`;
+    }
+    return `<tr>
+    <td>PO-${o.id}</td><td class="dim">${o.order_date}</td><td>${esc(o.suppliers?.name||"")}</td>
+    <td class="dim">${esc(o.reference||"")}${o.expected_date?" \u00B7 exp "+o.expected_date:""}${o.closed_reason?" \u00B7 "+esc(o.closed_reason):""}</td>
+    <td class="num">${totCases}</td><td class="num">${outCases%1?outCases.toFixed(1):outCases}</td>
+    <td>${poChips(o)}</td>
+    <td style="white-space:nowrap">${btns}</td></tr>`;
+  }).join("")||"<tr><td colspan=8 class='dim'>No purchase orders yet.</td></tr>";
+}
+async function poCancel(id){
+  if(!confirm("Cancel PO-"+id+"? Nothing has been received against it.")) return;
+  await db.from("purchase_orders").update({status:"cancelled",in_transit:false}).eq("id",id);
+  renderPos();
+}
+async function poCloseShort(id){
+  const reason=prompt("Close PO-"+id+" short \u2014 the outstanding balance will never arrive.\nWhy? (e.g. \u201Cvintage sold out \u2014 supplier credit note 1234\u201D, \u201Cquery 256/25\u201D)");
+  if(reason===null) return;
+  if(!reason.trim()) return alert("A reason is required \u2014 the trail must say why it never came.");
+  await db.from("purchase_orders").update({status:"closed_short",closed_reason:reason.trim(),in_transit:false}).eq("id",id);
+  renderPos();
+}
+
+/* ---- payments memo ---- */
+async function poPayOpen(id){
+  window._poPayId=id;
+  $("poPayNo").textContent="PO-"+id;
+  $("poPayDate").value=new Date().toISOString().slice(0,10);
+  $("poPayAmt").value=""; $("poPayNote").value="";
+  const m=$("poPayMsg"); m.textContent=""; m.className="msg";
+  await poPayRender();
+  $("poPayWrap").style.display="block";
+}
+function poPayClose(){ $("poPayWrap").style.display="none"; renderPos(); }
+async function poPayRender(){
+  const id=window._poPayId;
+  const {data:pays}=await db.from("purchase_order_payments").select("*").eq("po_id",id).order("pay_date");
+  const {data:lines}=await db.from("purchase_order_lines").select("cases,case_cost").eq("po_id",id);
+  const total=(lines||[]).reduce((s,l)=>s+Number(l.cases)*Number(l.case_cost),0);
+  const paid=(pays||[]).reduce((s,p)=>s+Number(p.amount),0);
+  $("poPaySummary").innerHTML="Paid <strong>\u20AC"+eur(paid)+"</strong> of \u20AC"+eur(total)+" order value.";
+  $("poPayList").innerHTML=(pays||[]).map(p=>`<tr><td class="dim">${p.pay_date}</td><td class="num">${eur(p.amount)}</td><td>${esc(p.note||"")}</td>
+    <td><button onclick="poPayDel(${p.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.15rem .5rem;cursor:pointer">\u2715</button></td></tr>`).join("")
+    ||"<tr><td colspan=4 class='dim'>No payments recorded.</td></tr>";
+}
+async function poPayAdd(){
+  const m=$("poPayMsg"); m.className="msg";
+  const amt=+$("poPayAmt").value||0;
+  if(amt<=0){ m.textContent="Enter the amount."; m.className="msg err"; return; }
+  const {error}=await db.from("purchase_order_payments").insert({
+    po_id:window._poPayId, pay_date:$("poPayDate").value, amount:amt, note:$("poPayNote").value.trim()||null});
+  if(error){ m.textContent="Not saved \u2014 "+error.message+" (has bundle_b2.sql been run?)"; m.className="msg err"; return; }
+  $("poPayAmt").value=""; $("poPayNote").value="";
+  m.textContent="Payment recorded."; m.className="msg ok";
+  poPayRender();
+}
+async function poPayDel(id){
+  if(!confirm("Remove this payment entry?")) return;
+  await db.from("purchase_order_payments").delete().eq("id",id);
+  poPayRender();
+}
+
+/* ---- receive a delivery (supplier-wide, spans POs) ---- */
+async function rdOpen(){
+  await ensureSuppliers();
+  $("rdDate").value=new Date().toISOString().slice(0,10);
+  $("rdLoc").innerHTML=(locations||[]).map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  const {data:open}=await db.from("purchase_orders").select("supplier_id").in("status",["open","part_received"]);
+  const supIds=[...new Set((open||[]).map(o=>o.supplier_id).filter(Boolean))];
+  const sups=(window._supAll||[]).filter(s=>supIds.includes(s.id));
+  $("rdSup").innerHTML='<option value="">\u2014 pick the supplier \u2014</option>'+
+    sups.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  $("rdSup").onchange=rdLoadLines;
+  $("rdLines").innerHTML="<p class='dim'>Pick the supplier to see their outstanding lines.</p>";
+  const m=$("rdMsg"); m.textContent=""; m.className="msg";
+  $("rdWrap").style.display="block";
+}
+function rdClose(){ $("rdWrap").style.display="none"; }
+async function rdLoadLines(){
+  const supId=+$("rdSup").value||null;
+  if(!supId){ $("rdLines").innerHTML=""; return; }
+  const {data:pos}=await db.from("purchase_orders")
+    .select("id,expected_date,status,purchase_order_lines(*)")
+    .eq("supplier_id",supId).in("status",["open","part_received"]).order("id");
+  window._rdLines=[];
+  (pos||[]).forEach(po=>(po.purchase_order_lines||[]).forEach(l=>{
+    if(poLineOut(l)>0) window._rdLines.push({po_id:po.id, exp:l.expected_date||po.expected_date, line:l});
+  }));
+  $("rdLines").innerHTML=window._rdLines.map((r,i)=>{
+    const out=poLineOut(r.line);
+    return `<div style="display:grid;grid-template-columns:3fr 100px 150px;gap:.5rem;align-items:end" data-rd="${i}">
+      <div style="align-self:center">${esc(r.line.description)}
+        <span class="dim">\u2014 PO-${r.po_id} \u00B7 ${out%1?out.toFixed(1):out} of ${r.line.cases} cases outstanding${r.exp?" \u00B7 exp "+r.exp:""}</span></div>
+      <div><label>Cases in</label><input class="rdCases" type="number" min="0" step="1" value="0"></div>
+      <div><label>Rotation no.</label><input class="rdRot" placeholder="from landing advice"></div>
+    </div>`;
+  }).join("")||"<p class='dim'>Nothing outstanding for this supplier.</p>";
+}
+async function rdSave(){
+  const m=$("rdMsg"); m.className="msg";
+  const fail=t=>{m.textContent=t;m.className="msg err";};
+  const locId=+$("rdLoc").value||null;
+  if(!locId) return fail("Pick the location the stock arrived into.");
+  const recv=[...document.querySelectorAll("#rdLines [data-rd]")].map(div=>({
+    r: window._rdLines[+div.dataset.rd],
+    cases:+div.querySelector(".rdCases").value||0,
+    rot:div.querySelector(".rdRot").value.trim()||null,
+  })).filter(x=>x.cases>0);
+  if(!recv.length) return fail("Enter cases received on at least one line.");
+  $("rdSaveBtn").disabled=true;
+  const moves=recv.map(x=>({ movement_date:$("rdDate").value, movement_type:"receipt",
+    product_id:x.r.line.product_id, qty_bottles:x.cases*poBic(x.r.line.product_id),
+    from_location_id:null, to_location_id:locId, owner_customer_id:null,
+    rotation_number:x.rot, reference:"PO-"+x.r.po_id }));
+  const {error:e1}=await db.from("stock_movements").insert(moves);
+  if(e1){ $("rdSaveBtn").disabled=false; return fail("Movements not posted \u2014 "+e1.message); }
+  for(const x of recv){
+    await db.from("purchase_order_lines").update({
+      bottles_received: Number(x.r.line.bottles_received||0)+x.cases*poBic(x.r.line.product_id)}).eq("id",x.r.line.id);
+  }
+  const poIds=[...new Set(recv.map(x=>x.r.po_id))];
+  for(const pid of poIds){
+    const {data:fresh}=await db.from("purchase_order_lines").select("product_id,cases,bottles_received").eq("po_id",pid);
+    const done=(fresh||[]).every(l=>Number(l.bottles_received||0)>=Number(l.cases)*poBic(l.product_id));
+    await db.from("purchase_orders").update(done?{status:"received",in_transit:false}:{status:"part_received"}).eq("id",pid);
+  }
+  $("rdSaveBtn").disabled=false;
+  m.textContent="Receipts posted \u2014 "+recv.reduce((s,x)=>s+x.cases,0)+" cases into stock across "+poIds.length+" PO"+(poIds.length===1?"":"s")+"."; m.className="msg ok";
+  setTimeout(()=>{ rdClose(); renderPos(); },900);
 }
 
 /* ==================== DELIVERY NOTES ==================== */
