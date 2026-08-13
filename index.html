@@ -1749,6 +1749,11 @@ async function wlGenerate(){
   const dutyOf=p=>dutyCats[p.duty_category_id]?Number(dutyCats[p.duty_category_id].duty_per_case):0;
   const priceDP=p=>Number(p.case_price)*disc;
   const priceIB=p=>Math.max(0,Number(p.case_price)-dutyOf(p))*disc;
+  const basis=cfg.basis||"dp";
+  const showBtl=cfg.perbottle;
+  const priceHead = basis==="both"
+    ? `<th class="r">Per case (in bond) &euro;</th><th class="r">Per case (duty paid) &euro;</th>${showBtl?'<th class="r">Per bottle (DP) &euro;</th>':''}`
+    : `<th class="r">Per case &euro;</th>${showBtl?'<th class="r">Per bottle &euro;</th>':''}`;
   const groupMode = cfg.group||"region";
   const OTHER = "Other producers";
   const supOf = p => supn[p.supplier_id] || OTHER;
