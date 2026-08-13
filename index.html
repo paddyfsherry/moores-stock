@@ -268,7 +268,10 @@
         <div><label for="soOrderNo">Customer order no. <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="soOrderNo"></div>
       </div>
       <div class="chosen" id="soCustInfo"></div>
-      <label>Lines</label>
+      <label>Lines <span style="text-transform:none;font-weight:400">(blank lines are ignored)</span></label>
+      <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600">
+        <div>Wine</div><div>Qty</div><div>Unit</div><div>Price &euro;</div><div>Note</div><div>Total &euro;</div><div></div>
+      </div>
       <div id="soLines"></div>
       <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="soAddLine">+ add line</button>
       <div class="grid2" style="margin-top:.6rem">
@@ -375,7 +378,10 @@
         </div>
         <div></div>
       </div>
-      <label>Lines <span style="text-transform:none;font-weight:400">(cost per case, ex-cellar; expected date only if it differs from the order&rsquo;s)</span></label>
+      <label>Lines <span style="text-transform:none;font-weight:400">(blank lines are ignored; note a line if it needs one &mdash; e.g. &ldquo;samples&rdquo; when there&rsquo;s no cost)</span></label>
+      <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600">
+        <div>Wine</div><div>Cases</div><div>Cost/case &euro;</div><div>Expected</div><div>Note</div><div>Total &euro;</div><div></div>
+      </div>
       <div id="poLines"></div>
       <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="poAddLine">+ add line</button>
       <div class="grid2" style="margin-top:.6rem">
@@ -1971,7 +1977,7 @@ async function soInit(){
     soRefreshPrices();
   });
   $("soAddLine").onclick=()=>addSoLine();
-  addSoLine();
+  for(let k=0;k<10;k++) addSoLine();
   $("soSave").onclick=saveSo;
   $("soShowDone").onchange=renderSos;
   renderSos();
@@ -1979,12 +1985,13 @@ async function soInit(){
 function addSoLine(){
   const i=Date.now()+Math.random();
   $("soLines").insertAdjacentHTML("beforeend",`
-  <div style="display:grid;grid-template-columns:3fr 70px 100px 110px 110px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-so="${i}">
-    <div><div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div></div>
-    <div><label>Qty</label><input class="soQty" type="number" min="0" step="1" value="1"></div>
-    <div><label>Unit</label><select class="soUnit"><option>Case</option><option>Bottle</option></select></div>
-    <div><label>Price \u20AC</label><input class="soPrice" type="number" min="0" step="0.01" value="0"></div>
-    <div><label>Total \u20AC</label><input class="soTot" disabled value="0.00" style="background:var(--paper)"></div>
+  <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;align-items:center;margin:.25rem 0" data-so="${i}">
+    <div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div>
+    <input class="soQty" type="number" min="0" step="1" value="">
+    <select class="soUnit"><option>Case</option><option>Bottle</option></select>
+    <input class="soPrice" type="number" min="0" step="0.01" value="">
+    <input class="soNote" placeholder="e.g. samples">
+    <input class="soTot" disabled value="" style="background:var(--paper)">
     <button onclick="this.closest('[data-so]').remove();soTotals()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">\u2715</button>
   </div>`);
   const div=$("soLines").lastElementChild;
@@ -1999,6 +2006,7 @@ function addSoLine(){
     ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
       const p=products.find(x=>x.id==li.dataset.id);
       inp.value=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      if(!+div.querySelector(".soQty").value) div.querySelector(".soQty").value=1;
       soSetLinePrice(div,p); soLineTotal(div);
     });
   };
@@ -2023,7 +2031,7 @@ function soRefreshPrices(){
 }
 function soLineTotal(div){
   const q=+div.querySelector(".soQty").value||0, pr=+div.querySelector(".soPrice").value||0;
-  div.querySelector(".soTot").value=(q*pr).toFixed(2);
+  div.querySelector(".soTot").value = q>0 ? (q*pr).toFixed(2) : "";
   soTotals();
 }
 function soTotals(){
@@ -2042,6 +2050,7 @@ async function saveSo(){
     qty:+div.querySelector(".soQty").value||0,
     unit:div.querySelector(".soUnit").value,
     price:+div.querySelector(".soPrice").value||0,
+    note:div.querySelector(".soNote").value.trim()||null,
   })).filter(l=>l.pid&&l.qty>0);
   if(!lines.length) return fail("Add at least one line with a wine and quantity.");
   $("soSave").disabled=true;
@@ -2051,11 +2060,11 @@ async function saveSo(){
     status:"open"}).select().single();
   if(e1){ $("soSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_b1.sql been run?)"); }
   const {error:e2}=await db.from("sales_order_lines").insert(lines.map(l=>({
-    so_id:so.id, product_id:l.pid, description:l.desc, qty:l.qty, unit:l.unit, case_price:l.price})));
+    so_id:so.id, product_id:l.pid, description:l.desc, qty:l.qty, unit:l.unit, case_price:l.price, note:l.note})));
   $("soSave").disabled=false;
   if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
   m.textContent="Order SO-"+so.id+" saved."; m.className="msg ok";
-  $("soLines").innerHTML=""; addSoLine(); $("soOrderNo").value=""; $("soComment").value=""; soTotals();
+  $("soLines").innerHTML=""; for(let k=0;k<10;k++) addSoLine(); $("soOrderNo").value=""; $("soComment").value=""; soTotals();
   renderSos();
 }
 const soStatusTag = s => ({open:"<span class='tag bond'>OPEN</span>",
@@ -2093,7 +2102,7 @@ async function soMakeInv(id){
     const left=Number(l.qty)-Number(l.qty_invoiced||0);
     return `<label style="display:flex;align-items:center;gap:.5rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink);${left<=0?"opacity:.4":""}">
       <input type="checkbox" class="soInvChk" data-i="${i}" ${left>0?"checked":"disabled"} style="width:auto">
-      <span>${esc(l.description)} <span class="dim">\u2014 ${left} of ${l.qty} ${esc(l.unit||"")} still to invoice @ \u20AC${eur(l.case_price)}</span></span>
+      <span>${esc(l.description)}${l.note?" \u00B7 "+esc(l.note):""} <span class="dim">\u2014 ${left} of ${l.qty} ${esc(l.unit||"")} still to invoice @ \u20AC${eur(l.case_price)}</span></span>
     </label>`;
   }).join("")||"<p class='dim'>No lines.</p>";
   const m=$("soInvMsg"); m.textContent=""; m.className="msg";
@@ -2111,7 +2120,7 @@ async function soInvSave(){
   const vatPct=23;
   const inv_lines=picked.map(l=>{
     const q=Number(l.qty)-Number(l.qty_invoiced||0);
-    return {product_id:l.product_id, description:l.description, qty:q, unit:l.unit,
+    return {product_id:l.product_id, description:l.description+(l.note?" \u2014 "+l.note:""), qty:q, unit:l.unit,
       case_price:Number(l.case_price), line_total:q*Number(l.case_price)};
   });
   const net=inv_lines.reduce((s,l)=>s+l.line_total,0), vat=net*vatPct/100;
@@ -2144,7 +2153,7 @@ async function poInit(){
   $("poSup").innerHTML='<option value="">\u2014 pick a supplier \u2014</option>'+
     (window._supAll||[]).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
   $("poAddLine").onclick=()=>addPoLine();
-  addPoLine();
+  for(let k=0;k<10;k++) addPoLine();
   $("poSave").onclick=savePo;
   $("poShowDone").onchange=renderPos;
   renderPos();
@@ -2152,12 +2161,13 @@ async function poInit(){
 function addPoLine(){
   const i=Date.now()+Math.random();
   $("poLines").insertAdjacentHTML("beforeend",`
-  <div style="display:grid;grid-template-columns:3fr 80px 115px 150px 105px 34px;gap:.5rem;align-items:end;margin:.3rem 0" data-po="${i}">
-    <div><div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div></div>
-    <div><label>Cases</label><input class="poCases" type="number" min="0" step="1" value="1"></div>
-    <div><label>Cost/case \u20AC</label><input class="poCost" type="number" min="0" step="0.01" value="0"></div>
-    <div><label>Expected</label><input class="poExp" type="date"></div>
-    <div><label>Total \u20AC</label><input class="poTot" disabled value="0.00" style="background:var(--paper)"></div>
+  <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;align-items:center;margin:.25rem 0" data-po="${i}">
+    <div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div>
+    <input class="poCases" type="number" min="0" step="1" value="">
+    <input class="poCost" type="number" min="0" step="0.01" value="">
+    <input class="poExp" type="date">
+    <input class="poNote" placeholder="e.g. samples">
+    <input class="poTot" disabled value="" style="background:var(--paper)">
     <button onclick="this.closest('[data-po]').remove();poTotals()" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.5rem 0;cursor:pointer">\u2715</button>
   </div>`);
   const div=$("poLines").lastElementChild;
@@ -2172,6 +2182,7 @@ function addPoLine(){
     ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
       const p=products.find(x=>x.id==li.dataset.id);
       inp.value=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
+      if(!+div.querySelector(".poCases").value) div.querySelector(".poCases").value=1;
       poLineTotal(div);
     });
   };
@@ -2180,7 +2191,7 @@ function addPoLine(){
 }
 function poLineTotal(div){
   const q=+div.querySelector(".poCases").value||0, c=+div.querySelector(".poCost").value||0;
-  div.querySelector(".poTot").value=(q*c).toFixed(2);
+  div.querySelector(".poTot").value = q>0 ? (q*c).toFixed(2) : "";
   poTotals();
 }
 function poTotals(){
@@ -2200,6 +2211,7 @@ async function savePo(){
     cases:+div.querySelector(".poCases").value||0,
     cost:+div.querySelector(".poCost").value||0,
     exp:div.querySelector(".poExp").value||null,
+    note:div.querySelector(".poNote").value.trim()||null,
   })).filter(l=>l.pid&&l.cases>0);
   if(!lines.length) return fail("Add at least one line with a wine and case quantity.");
   $("poSave").disabled=true;
@@ -2209,11 +2221,11 @@ async function savePo(){
     in_transit:$("poTransit").checked, comment:$("poComment").value.trim()||null, status:"open"}).select().single();
   if(e1){ $("poSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_b2.sql been run?)"); }
   const {error:e2}=await db.from("purchase_order_lines").insert(lines.map(l=>({
-    po_id:po.id, product_id:l.pid, description:l.desc, cases:l.cases, case_cost:l.cost, expected_date:l.exp})));
+    po_id:po.id, product_id:l.pid, description:l.desc, cases:l.cases, case_cost:l.cost, expected_date:l.exp, note:l.note})));
   $("poSave").disabled=false;
   if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
   m.textContent="Purchase order PO-"+po.id+" saved."; m.className="msg ok";
-  $("poLines").innerHTML=""; addPoLine();
+  $("poLines").innerHTML=""; for(let k=0;k<10;k++) addPoLine();
   $("poRef").value=""; $("poComment").value=""; $("poExpected").value="";
   $("poTransit").checked=false; poTotals();
   renderPos();
@@ -2350,7 +2362,7 @@ async function rdLoadLines(){
   $("rdLines").innerHTML=window._rdLines.map((r,i)=>{
     const out=poLineOut(r.line);
     return `<div style="display:grid;grid-template-columns:3fr 100px 150px;gap:.5rem;align-items:end" data-rd="${i}">
-      <div style="align-self:center">${esc(r.line.description)}
+      <div style="align-self:center">${esc(r.line.description)}${r.line.note?" \u00B7 "+esc(r.line.note):""}
         <span class="dim">\u2014 PO-${r.po_id} \u00B7 ${out%1?out.toFixed(1):out} of ${r.line.cases} cases outstanding${r.exp?" \u00B7 exp "+r.exp:""}</span></div>
       <div><label>Cases in</label><input class="rdCases" type="number" min="0" step="1" value="0"></div>
       <div><label>Rotation no.</label><input class="rdRot" placeholder="from landing advice"></div>
