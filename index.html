@@ -433,6 +433,7 @@
         <div><label for="rdDate">Received date</label><input id="rdDate" type="date"></div>
         <div><label for="rdLoc">Into location</label><select id="rdLoc"></select></div>
       </div>
+      <div style="margin:.4rem 0"><label for="rdInvoiceFile">Attach supplier invoice PDF (optional \u2014 kept as backup, not parsed)</label><input id="rdInvoiceFile" type="file" accept="application/pdf"></div>
       <div id="rdLines" style="display:flex;flex-direction:column;gap:.3rem;margin:.4rem 0 .6rem"></div>
       <button class="btn" id="rdSaveBtn" onclick="rdSave()">Post receipts</button>
       <div class="msg" id="rdMsg"></div>
@@ -2412,10 +2413,22 @@ async function rdSave(){
   })).filter(x=>x.cases>0);
   if(!recv.length) return fail("Enter cases received on at least one line.");
   $("rdSaveBtn").disabled=true;
+  let invId=null;
+  const invFile=$("rdInvoiceFile").files[0];
+  if(invFile){
+    const supId=+$("rdSup").value||null;
+    const path="receipts/"+Date.now()+"-"+invFile.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const {error:eUp}=await db.storage.from("supplier-invoices").upload(path, invFile);
+    if(eUp){ $("rdSaveBtn").disabled=false; return fail("Invoice attachment failed to upload \u2014 "+eUp.message+". You can post the receipt without it and attach later."); }
+    const {data:inv,error:eInv}=await db.from("supplier_invoices").insert({
+      supplier_id:supId, invoice_date:$("rdDate").value, filename:invFile.name, status:"attached", storage_path:path
+    }).select().single();
+    if(!eInv) invId=inv.id;
+  }
   const moves=recv.map(x=>({ movement_date:$("rdDate").value, movement_type:"receipt",
     product_id:x.r.line.product_id, qty_bottles:x.cases*poBic(x.r.line.product_id),
     from_location_id:null, to_location_id:locId, owner_customer_id:null,
-    rotation_number:x.rot, reference:"PO-"+x.r.po_id }));
+    rotation_number:x.rot, reference:"PO-"+x.r.po_id, supplier_invoice_id:invId }));
   const {error:e1}=await db.from("stock_movements").insert(moves);
   if(e1){ $("rdSaveBtn").disabled=false; return fail("Movements not posted \u2014 "+e1.message); }
   for(const x of recv){
@@ -2487,51 +2500,87 @@ $("siFile").onchange = async ()=>{
   $("siInvNo").value = parsed.invoiceNumber||"";
   if(parsed.invoiceDate) $("siDate").value = parsed.invoiceDate;
   siLines = parsed.lines.map(pl=>{
-    const openLine = siOpenLines.find(o=>o.line.product_id===pl.matchedProductId);
-    let status="unmatched";
-    if(openLine){
-      const out=poLineOut(openLine.line);
-      status = (Math.abs(out-Number(pl.cases))<0.01) ? "matched" : "qtydiff";
+    const conf = pl.confidence==="high" ? "high" : "low";
+    let status, openLine=null;
+    if(!pl.matchedProductId){
+      status = "unmatched";
+    } else if(conf==="low"){
+      status = "possible";
+    } else {
+      openLine = siOpenLines.find(o=>o.line.product_id===pl.matchedProductId);
+      if(openLine){
+        const out=poLineOut(openLine.line);
+        status = (Math.abs(out-Number(pl.cases))<0.01) ? "matched" : "qtydiff";
+      } else {
+        status = "possible"; // Claude's confident about the wine, but it's not on any open PO
+      }
     }
-    return {...pl, po_line:openLine||null, status};
+    return {...pl, po_line:openLine, status, candidateId:pl.matchedProductId||null};
   });
   siRender();
   m.textContent="Read "+siLines.length+" line"+(siLines.length===1?"":"s")+" \u2014 review the matches below before posting.";
   m.className="msg ok";
   $("siResults").style.display="block";
 };
+function siProdName(id){ const p=products.find(x=>x.id===id); return p?p.name:("#"+id); }
 function siRender(){
+  const supId=+$("siSup").value;
+  const supProducts = products.filter(p=>p.supplier_id===supId && !p.obsolete);
   $("siBody").innerHTML = siLines.map((l,i)=>{
-    const badge = l.status==="matched" ? "<span style='background:var(--dp-bg,#e1f5ee);color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Matched</span>"
-      : l.status==="qtydiff" ? "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Qty differs from PO"+(l.po_line?" ("+poLineOut(l.po_line.line)+" outstanding)":"")+"</span>"
-      : "<span style='background:#fcebeb;color:#a32d2d;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Not on any open PO</span>";
-    const action = l.status==="unmatched"
-      ? `<button onclick="siAddToPO(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem">Add to PO</button>`
-      : "";
-    return `<tr><td>${esc(l.description||"")}${l.matchedProductId?"":" <span class='dim'>(no product match)</span>"}</td>
+    let badge, action;
+    if(l.status==="matched"){
+      badge = "<span style='background:#e1f5ee;color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Matched</span>";
+      action = "";
+    } else if(l.status==="qtydiff"){
+      badge = "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Qty differs from PO"+(l.po_line?" ("+poLineOut(l.po_line.line)+" outstanding)":"")+"</span>";
+      action = "";
+    } else if(l.status==="possible"){
+      badge = "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Possible match: "+esc(siProdName(l.candidateId))+"</span>";
+      action = `<button onclick="siConfirm(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;margin-right:.3rem">Confirm</button>
+        <button onclick="siReject(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem">Not this</button>`;
+    } else {
+      badge = "<span style='background:#fcebeb;color:#a32d2d;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>No product match</span>";
+      const opts = '<option value="">\u2014 pick the wine \u2014</option>'+supProducts.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+      action = `<select onchange="siManualPick(${i},this.value)" style="font-size:.8rem;padding:.2rem">${opts}</select>`;
+    }
+    return `<tr><td>${esc(l.description||"")}</td>
       <td class="num">${l.cases}</td><td class="num">\u20ac${Number(l.caseCost||0).toFixed(2)}</td><td>${badge}</td><td>${action}</td></tr>`;
   }).join("");
   const postable = siLines.filter(l=>l.status==="matched"||l.status==="qtydiff").length;
   $("siPostHint").textContent = postable<siLines.length
-    ? (siLines.length-postable)+" line"+(siLines.length-postable===1?"":"s")+" won't post until matched to a PO \u2014 add them or leave them out."
+    ? (siLines.length-postable)+" line"+(siLines.length-postable===1?"":"s")+" won't post until confirmed and matched to a PO."
     : "";
 }
-async function siAddToPO(i){
+async function siResolveToPO(i){
   const l=siLines[i];
   const supId=+$("siSup").value;
+  const openLine = siOpenLines.find(o=>o.line.product_id===l.candidateId);
+  if(openLine){
+    const out=poLineOut(openLine.line);
+    siLines[i].po_line=openLine; siLines[i].matchedProductId=l.candidateId;
+    siLines[i].status=(Math.abs(out-Number(l.cases))<0.01)?"matched":"qtydiff";
+    siRender(); return;
+  }
   const {data:openPos}=await db.from("purchase_orders").select("id").eq("supplier_id",supId).in("status",["open","part_received"]).order("id",{ascending:false}).limit(1);
   if(!openPos||!openPos.length){ alert("No open PO for this supplier to add the line to \u2014 create one first from Purchase orders."); return; }
   const poId=openPos[0].id;
-  if(!l.matchedProductId){ alert("Claude couldn't match this line to a product in the catalogue \u2014 add it manually via the PO form instead."); return; }
   const {data:newLine,error}=await db.from("purchase_order_lines").insert({
-    po_id:poId, product_id:l.matchedProductId, description:l.description, cases:l.cases, case_cost:l.caseCost||0, bottles_received:0
+    po_id:poId, product_id:l.candidateId, description:l.description, cases:l.cases, case_cost:l.caseCost||0, bottles_received:0
   }).select().single();
   if(error){ alert("Couldn't add line: "+error.message); return; }
   await db.from("purchase_orders").update({status:"part_received"}).eq("id",poId).eq("status","open");
   siOpenLines.push({po_id:poId, line:newLine});
-  siLines[i].status="matched"; siLines[i].po_line={po_id:poId, line:newLine};
+  siLines[i].matchedProductId=l.candidateId; siLines[i].status="matched"; siLines[i].po_line={po_id:poId, line:newLine};
   siRender();
 }
+function siConfirm(i){ siResolveToPO(i); }
+function siReject(i){ siLines[i].candidateId=null; siLines[i].matchedProductId=null; siLines[i].status="unmatched"; siRender(); }
+function siManualPick(i,val){
+  if(!val) return;
+  siLines[i].candidateId=+val;
+  siResolveToPO(i);
+}
+async function siAddToPO(i){ siResolveToPO(i); }
 async function siPost(){
   const m=$("siMsg"); m.className="msg";
   const fail=t=>{m.textContent=t;m.className="msg err";};
@@ -2541,9 +2590,16 @@ async function siPost(){
   if(!toPost.length) return fail("Nothing matched to a PO yet \u2014 match or add lines first.");
   $("siPostBtn").disabled=true;
   const supId=+$("siSup").value;
+  const siFileObj=$("siFile").files[0];
+  let storagePath=null;
+  if(siFileObj){
+    const path="ai-extracted/"+Date.now()+"-"+siFileObj.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const {error:eUp}=await db.storage.from("supplier-invoices").upload(path, siFileObj);
+    if(!eUp) storagePath=path;
+  }
   const {data:inv,error:e0}=await db.from("supplier_invoices").insert({
     supplier_id:supId, invoice_number:$("siInvNo").value||null, invoice_date:$("siDate").value,
-    filename:$("siFile").files[0]?.name||null, status:"posted", raw_extract:siLines
+    filename:siFileObj?.name||null, status:"posted", raw_extract:siLines, storage_path:storagePath
   }).select().single();
   if(e0){ $("siPostBtn").disabled=false; return fail("Invoice not saved \u2014 "+e0.message); }
   const moves=toPost.map(l=>({ movement_date:$("siDate").value, movement_type:"receipt",
