@@ -396,7 +396,7 @@
     </div>
   </div>
 
-  <!-- ========== PURCHASE ORDER LIST ========== -->
+  <!-- ========== PURCHASE ORDER LIST (master-detail) ========== -->
   <div id="viewPO" class="view" style="display:none">
     <div class="panel">
       <div style="display:flex;align-items:baseline;gap:1rem">
@@ -404,10 +404,30 @@
         <button class="btn" style="margin-left:auto;background:#7A6E63" onclick="siOpen()">Upload supplier invoice</button>
         <button class="btn" onclick="rdOpen()">Receive delivery</button>
       </div>
-      <p class="hint">One physical delivery, one screen &mdash; it lists every outstanding line across the supplier&rsquo;s open orders, however many POs the consignment settles.</p>
-      <label style="display:flex;align-items:center;gap:.4rem;margin:0 0 .5rem;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="poShowDone" style="width:auto"> show received &amp; cancelled too</label>
-      <div class="wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Reference</th><th class="num">Cases</th><th class="num">Outstanding</th><th>Status</th><th></th></tr></thead>
-      <tbody id="poList"></tbody></table></div>
+      <div style="display:grid;grid-template-columns:290px 1fr;gap:1rem;margin-top:.8rem;align-items:start">
+        <div>
+          <input id="poqSearch" placeholder="Search PO number or supplier&hellip;" style="margin-bottom:.5rem">
+          <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.6rem" id="poqChips"></div>
+          <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;max-height:70vh;overflow-y:auto" id="poCardList"></div>
+        </div>
+        <div id="poDetailWrap">
+          <p class="hint" style="margin:1.5rem 0">Pick a purchase order on the left to see it here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== PO CLOSE SHORT PROMPT (inline, reuses .msg pattern) ========== -->
+  <div id="poCloseWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:75" onclick="if(event.target===this)$('poCloseWrap').style.display='none'">
+    <div style="background:var(--paper);max-width:480px;margin:10vh auto;border-radius:10px;padding:1.2rem 1.4rem">
+      <h2 class="serif" style="font-size:1.1rem;margin:0 0 .4rem">Close short &mdash; <span id="poCloseNo"></span></h2>
+      <p class="hint" style="margin:0 0 .6rem">The outstanding balance will never arrive. Why? (e.g. &ldquo;vintage sold out &mdash; supplier credit note 1234&rdquo;, &ldquo;query 256/25&rdquo;)</p>
+      <textarea id="poCloseReason" rows="3" style="width:100%"></textarea>
+      <div style="display:flex;gap:.5rem;margin-top:.7rem">
+        <button class="btn" onclick="poCloseConfirm()">Close short</button>
+        <button class="btn" style="background:none;border:1px solid var(--line);color:var(--ink)" onclick="$('poCloseWrap').style.display='none'">Cancel</button>
+      </div>
+      <div class="msg" id="poCloseMsg"></div>
     </div>
   </div>
 
@@ -476,26 +496,7 @@
     </div>
   </div>
 
-  <!-- ========== PO PAYMENTS MODAL ========== -->
-  <div id="poPayWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:70" onclick="if(event.target===this)poPayClose()">
-    <div style="background:var(--paper);max-width:520px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
-      <div style="display:flex;align-items:baseline;gap:1rem">
-        <h2 class="serif" style="font-size:1.15rem">Payments &mdash; <span id="poPayNo"></span></h2>
-        <button onclick="poPayClose()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
-      </div>
-      <p class="hint" style="margin:.2rem 0 .8rem">A memo, not a ledger &mdash; Sage keeps the books. This just answers &ldquo;what&rsquo;s on order and what have we paid for?&rdquo;</p>
-      <p id="poPaySummary" style="font-family:'Libre Caslon Text',serif;margin:.2rem 0 .6rem"></p>
-      <table><thead><tr><th>Date</th><th class="num">Amount &euro;</th><th>Note</th><th></th></tr></thead>
-      <tbody id="poPayList"></tbody></table>
-      <div class="grid3" style="margin-top:.6rem">
-        <div><label for="poPayDate">Date</label><input id="poPayDate" type="date"></div>
-        <div><label for="poPayAmt">Amount &euro;</label><input id="poPayAmt" type="number" min="0" step="0.01"></div>
-        <div><label for="poPayNote">Note <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poPayNote" placeholder="e.g. 50% deposit"></div>
-      </div>
-      <button class="btn" onclick="poPayAdd()">Record payment</button>
-      <div class="msg" id="poPayMsg"></div>
-    </div>
-  </div>
+  <!-- PO Payments now shown inline in the PO detail panel (see viewPO) -->
 
   <!-- ========== DELIVERY NOTES ========== -->
   <div id="viewDelNotes" class="view" style="display:none">
@@ -2267,7 +2268,6 @@ async function poInit(){
   $("poAddLine").onclick=()=>addPoLine();
   for(let k=0;k<5;k++) addPoLine();
   $("poSave").onclick=savePo;
-  $("poShowDone").onchange=renderPos;
 }
 function addPoLine(){
   const i=Date.now()+Math.random();
@@ -2337,105 +2337,247 @@ async function savePo(){
 }
 function poBic(pid){ const p=products.find(x=>x.id===pid); return p?p.bottles_in_case:12; }
 function poLineOut(l){ return Math.max(0, Number(l.cases)-Number(l.bottles_received||0)/poBic(l.product_id)); }
-const poChips = o => {
-  let c="";
-  const total=(o.purchase_order_lines||[]).reduce((s,l)=>s+Number(l.cases)*Number(l.case_cost),0);
-  const paid=(o.purchase_order_payments||[]).reduce((s,p)=>s+Number(p.amount),0);
-  if(total>0||paid>0){
-    const col = paid>=total&&total>0 ? "var(--claret)" : paid>0 ? "#B08D2E" : "#A03030";
-    c+=`<span class='tag' style='background:${col};color:#fff'>PAID \u20AC${eur(paid)} OF \u20AC${eur(total)}</span> `;
-  }
-  if(o.status==="open"||o.status==="part_received"){
-    const today=new Date().toISOString().slice(0,10);
-    const late=(o.purchase_order_lines||[]).some(l=>{
-      const d=l.expected_date||o.expected_date;
-      return poLineOut(l)>0 && d && d<today;
-    });
-    if(late) c+="<span class='tag' style='background:#A03030;color:#fff'>OVERDUE</span> ";
-    if(o.in_transit) c+="<span class='tag' style='background:#B08D2E;color:#fff'>IN TRANSIT</span> ";
-  }
-  const st={open:"OPEN",part_received:"PART RECEIVED",received:"RECEIVED",closed_short:"CLOSED SHORT",cancelled:"CANCELLED"}[o.status]||o.status;
-  c+="<span class='tag' style='background:#7A6E63;color:#fff'>"+st+"</span>";
-  return c;
-};
+function poStatusTag(status){
+  const map={open:["OPEN","#7A6E63"],part_received:["PART RECEIVED","#B08D2E"],received:["RECEIVED","var(--claret)"],closed_short:["CLOSED SHORT","#A03030"],cancelled:["CANCELLED","#9A8F84"]};
+  const [label,col]=map[status]||[status,"#7A6E63"];
+  return `<span class="tag" style="background:${col};color:#fff">${label}</span>`;
+}
+const POQ_STATUSES=[["open","Open"],["part_received","Part received"],["received","Received"],["closed_short","Closed short"],["cancelled","Cancelled"]];
+window._poqActive = new Set(["open","part_received"]);
 async function renderPos(){
-  const showDone=$("poShowDone").checked;
-  let q=db.from("purchase_orders").select("*, suppliers(name), purchase_order_lines(id,product_id,description,cases,case_cost,bottles_received,expected_date), purchase_order_payments(id,amount)").order("id",{ascending:false}).limit(80);
-  if(!showDone) q=q.in("status",["open","part_received"]);
-  const {data,error}=await q;
-  if(error){ $("poList").innerHTML="<tr><td colspan=8 class='dim'>Couldn\u2019t load \u2014 "+esc(error.message)+" (has bundle_b2.sql been run?)</td></tr>"; return; }
+  const {data,error}=await db.from("purchase_orders")
+    .select("*, suppliers(name), purchase_order_lines(id,product_id,description,cases,case_cost,bottles_received,expected_date), purchase_order_payments(id,pay_date,amount,note)")
+    .order("id",{ascending:false}).limit(200);
+  if(error){ $("poCardList").innerHTML="<p class='hint' style='padding:.8rem'>Couldn\u2019t load \u2014 "+esc(error.message)+"</p>"; return; }
   window._poCache=data||[];
-  $("poList").innerHTML=(data||[]).map(o=>{
+  poqRenderChips();
+  poqRenderCards();
+  if(!window._poSelectedId || !(window._poCache||[]).some(o=>o.id===window._poSelectedId)){
+    const first=poqFiltered()[0];
+    window._poSelectedId = first?first.id:null;
+  }
+  poRenderDetail();
+}
+function poqRenderChips(){
+  $("poqChips").innerHTML = POQ_STATUSES.map(([k,label])=>
+    `<button onclick="poqToggle('${k}')" class="${window._poqActive.has(k)?'active':''}" style="border:1px solid var(--line);background:${window._poqActive.has(k)?'var(--claret)':'#fff'};color:${window._poqActive.has(k)?'#F6EDE4':'var(--ink)'};border-radius:99px;padding:.25rem .8rem;cursor:pointer;font-size:.78rem">${label}</button>`
+  ).join("");
+  $("poqSearch").oninput = poqRenderCards;
+}
+function poqToggle(status){
+  if(window._poqActive.has(status)) window._poqActive.delete(status); else window._poqActive.add(status);
+  poqRenderChips(); poqRenderCards();
+}
+function poqFiltered(){
+  const q=($("poqSearch").value||"").trim().toLowerCase();
+  return (window._poCache||[]).filter(o=>{
+    if(!window._poqActive.has(o.status)) return false;
+    if(!q) return true;
+    return ("po-"+o.id).includes(q) || (o.suppliers?.name||"").toLowerCase().includes(q);
+  });
+}
+function poqRenderCards(){
+  const list=poqFiltered();
+  $("poCardList").innerHTML = list.map(o=>{
     const totCases=(o.purchase_order_lines||[]).reduce((s,l)=>s+Number(l.cases),0);
     const outCases=(o.purchase_order_lines||[]).reduce((s,l)=>s+poLineOut(l),0);
-    const open=o.status==="open"||o.status==="part_received";
-    const nothingIn=(o.purchase_order_lines||[]).every(l=>Number(l.bottles_received||0)===0);
-    let btns="";
-    if(open){
-      btns+=`<button onclick="poPayOpen(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Payments</button> `;
-      if(nothingIn) btns+=`<button onclick="poCancel(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Cancel</button>`;
-      else btns+=`<button onclick="poCloseShort(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Close short</button>`;
-    } else {
-      btns+=`<button onclick="poPayOpen(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Payments</button>`;
+    const active = o.id===window._poSelectedId;
+    return `<div onclick="poSelect(${o.id})" style="padding:.7rem .9rem;border-bottom:1px solid var(--line);cursor:pointer;${active?'border-left:4px solid var(--claret);background:#F7ECEF;padding-left:calc(.9rem - 3px)':''}">
+      <div style="font-weight:600;font-size:.9rem">PO-${o.id} \u00B7 ${esc(o.suppliers?.name||"")}</div>
+      <div style="font-size:.76rem;color:var(--muted);margin:.15rem 0 .35rem">${totCases} case${totCases===1?"":"s"} \u00B7 ${outCases%1?outCases.toFixed(1):outCases} out</div>
+      ${poStatusTag(o.status)}
+    </div>`;
+  }).join("") || "<p class='hint' style='padding:.8rem'>No purchase orders match.</p>";
+}
+function poSelect(id){ window._poSelectedId=id; poqRenderCards(); poRenderDetail(); }
+
+async function poRenderDetail(){
+  const wrap=$("poDetailWrap");
+  const o=(window._poCache||[]).find(x=>x.id===window._poSelectedId);
+  if(!o){ wrap.innerHTML="<p class='hint' style='margin:1.5rem 0'>Pick a purchase order on the left to see it here.</p>"; return; }
+  const lines=o.purchase_order_lines||[];
+  const net=lines.reduce((s,l)=>s+Number(l.cases)*Number(l.case_cost),0);
+  const paid=(o.purchase_order_payments||[]).reduce((s,p)=>s+Number(p.amount),0);
+  const nothingIn=lines.every(l=>Number(l.bottles_received||0)===0);
+  const openStatus = o.status==="open"||o.status==="part_received";
+
+  const lineRows = lines.map(l=>{
+    const locked = Number(l.bottles_received||0)>0;
+    const total=Number(l.cases)*Number(l.case_cost);
+    if(locked){
+      return `<tr style="color:var(--muted);font-style:italic">
+        <td>${esc(l.description)}<span style="display:block;font-size:.72rem">locked \u2014 received against</span></td>
+        <td class="num">${l.cases}</td><td class="num">\u20AC${eur(l.case_cost)}</td><td class="num">\u20AC${eur(total)}</td>
+        <td class="num">${poLineOut(l)%1?poLineOut(l).toFixed(1):poLineOut(l)} out</td></tr>`;
     }
     return `<tr>
-    <td>PO-${o.id}</td><td class="dim">${o.order_date}</td><td>${esc(o.suppliers?.name||"")}</td>
-    <td class="dim">${esc(o.reference||"")}${o.expected_date?" \u00B7 exp "+o.expected_date:""}${o.closed_reason?" \u00B7 "+esc(o.closed_reason):""}</td>
-    <td class="num">${totCases}</td><td class="num">${outCases%1?outCases.toFixed(1):outCases}</td>
-    <td>${poChips(o)}</td>
-    <td style="white-space:nowrap">${btns}</td></tr>`;
-  }).join("")||"<tr><td colspan=8 class='dim'>No purchase orders yet.</td></tr>";
+      <td>${esc(l.description)}</td>
+      <td class="num"><input value="${l.cases}" data-poline="${l.id}" data-field="cases" onchange="poLineFieldSave(this)" style="width:60px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent"></td>
+      <td class="num"><input value="${Number(l.case_cost).toFixed(2)}" data-poline="${l.id}" data-field="case_cost" onchange="poLineFieldSave(this)" style="width:75px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent"></td>
+      <td class="num">\u20AC${eur(total)}</td>
+      <td class="num">${poLineOut(l)%1?poLineOut(l).toFixed(1):poLineOut(l)} out</td></tr>`;
+  }).join("");
+
+  const {data:receipts} = await db.from("stock_movements").select("movement_date,qty_bottles,rotation_number,product_id,to_location_id").eq("reference","PO-"+o.id).eq("movement_type","receipt").order("movement_date");
+  const lname = id => (locations.find(l=>l.id===id)||{}).name||"\u2014";
+  const receiptRows = (receipts||[]).map(r=>{
+    const p=products.find(x=>x.id===r.product_id);
+    const bic=p?p.bottles_in_case:12;
+    const cases=r.qty_bottles/bic;
+    return `<div class="plainrow" style="font-size:.9rem;padding:.35rem 0;border-top:1px solid var(--line)">${r.movement_date} \u2014 ${esc(p?p.name:"#"+r.product_id)} \u2014 ${cases%1?cases.toFixed(1):cases} case${cases===1?"":"s"}${r.rotation_number?" \u00B7 rot "+esc(r.rotation_number):""} \u00B7 ${esc(lname(r.to_location_id))}</div>`;
+  }).join("") || "<p class='hint' style='margin:.3rem 0'>Nothing received yet.</p>";
+
+  const payRows = (o.purchase_order_payments||[]).map(p=>`
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:.6rem;align-items:center;padding:.35rem 0;border-top:1px solid var(--line)">
+      <input type="date" value="${p.pay_date}" data-poPay="${p.id}" data-field="pay_date" onchange="poPayFieldSave(this)" style="border:none;border-bottom:1px solid var(--line);background:transparent;font-size:.85rem">
+      <input value="${Number(p.amount).toFixed(2)}" data-poPay="${p.id}" data-field="amount" onchange="poPayFieldSave(this)" style="border:none;border-bottom:1px solid var(--line);background:transparent;font-size:.85rem;text-align:right">
+      <input value="${esc(p.note||"")}" data-poPay="${p.id}" data-field="note" onchange="poPayFieldSave(this)" style="border:none;border-bottom:1px solid var(--line);background:transparent;font-size:.85rem">
+      <button onclick="poPayDel(${p.id})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem" title="Delete payment">\u2715</button>
+    </div>`).join("");
+
+  wrap.innerHTML = `
+    <h2 class="serif" style="font-size:1.3rem;margin:0 0 .25rem;display:flex;align-items:baseline;gap:.6rem">PO-${o.id} &mdash; ${esc(o.suppliers?.name||"")} ${poStatusTag(o.status)}</h2>
+    <p class="hint" style="margin:0 0 .8rem">${o.order_date}${o.reference?" \u00B7 ref "+esc(o.reference):""}${o.expected_date?" \u00B7 expected "+o.expected_date:""}</p>
+    <p style="margin:0 0 1rem"><span class="tag" style="background:${paid>=net&&net>0?'var(--claret)':paid>0?'#B08D2E':'#A03030'};color:#fff">PAID \u20AC${eur(paid)} OF \u20AC${eur(net)}</span></p>
+
+    <div class="grid3" style="margin-bottom:1rem">
+      <div><label>Reference</label><input id="podRef" value="${esc(o.reference||"")}" onchange="poHeaderFieldSave(${o.id},'reference',this.value)"></div>
+      <div><label>Expected delivery</label><input id="podExp" type="date" value="${o.expected_date||""}" onchange="poHeaderFieldSave(${o.id},'expected_date',this.value)"></div>
+      <div><label>Comment</label><input id="podComment" value="${esc(o.comment||"")}" placeholder="optional" onchange="poHeaderFieldSave(${o.id},'comment',this.value)"></div>
+    </div>
+
+    <div class="wrap"><table>
+      <thead><tr><th>Wine</th><th class="num">Cases</th><th class="num">Cost/case</th><th class="num">Line total</th><th class="num">Outstanding</th></tr></thead>
+      <tbody>${lineRows}</tbody>
+    </table></div>
+    <p style="text-align:right;font-family:'Libre Caslon Text',serif;font-size:1rem;margin:.5rem 0 0">
+      Net \u20AC${eur(net)} &nbsp;\u00B7&nbsp; VAT \u20AC0.00 &nbsp;\u00B7&nbsp; <strong>Total \u20AC${eur(net)}</strong>
+    </p>
+    <p class="hint" style="margin:.15rem 0 0">Wine moves in bond \u2014 no VAT on this order; duty and VAT apply on release from bond.</p>
+
+    <h3 class="serif" style="font-size:.95rem;margin:1.3rem 0 .3rem">Receipts</h3>
+    ${receiptRows}
+
+    <h3 class="serif" style="font-size:.95rem;margin:1.3rem 0 .3rem">Payments</h3>
+    ${payRows || "<p class='hint' style='margin:.3rem 0'>No payments recorded.</p>"}
+    <p style="text-align:right;font-family:'Libre Caslon Text',serif;font-size:.92rem;margin:.4rem 0 0">Paid \u20AC${eur(paid)} of \u20AC${eur(net)}</p>
+
+    <div style="display:flex;gap:.5rem;margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--line);flex-wrap:wrap">
+      <button class="btn" style="margin-top:0" onclick="poPayAddInline(${o.id})">+ Add payment</button>
+      ${openStatus ? (nothingIn
+        ? `<button class="btn" style="margin-top:0;background:none;border:1px solid var(--line);color:var(--ink)" onclick="poCancel(${o.id})">Cancel</button>`
+        : `<button class="btn" style="margin-top:0;background:none;border:1px solid var(--line);color:var(--ink)" onclick="poCloseShortOpen(${o.id})">Close short</button>`) : ""}
+      <button class="btn" style="margin-top:0;background:none;border:1px solid var(--line);color:var(--ink)" onclick="printPo(${o.id})">Print</button>
+      <button class="btn" style="margin-top:0;background:none;border:1px solid var(--line);color:var(--ink)" onclick="exportPoCsv(${o.id})">Export CSV</button>
+    </div>
+    <div class="msg" id="poDetailMsg"></div>
+  `;
+}
+async function poHeaderFieldSave(id,field,value){
+  const {error}=await db.from("purchase_orders").update({[field]:value||null}).eq("id",id);
+  const m=$("poDetailMsg");
+  if(error){ m.textContent="Not saved \u2014 "+error.message; m.className="msg err"; return; }
+  const o=(window._poCache||[]).find(x=>x.id===id); if(o) o[field]=value||null;
+  m.textContent="Saved."; m.className="msg ok";
+  poqRenderCards();
+}
+async function poLineFieldSave(inp){
+  const lineId=+inp.dataset.poline, field=inp.dataset.field;
+  const val=+inp.value||0;
+  const {error}=await db.from("purchase_order_lines").update({[field]:val}).eq("id",lineId);
+  const m=$("poDetailMsg");
+  if(error){ m.textContent="Not saved \u2014 "+error.message; m.className="msg err"; return; }
+  const o=(window._poCache||[]).find(x=>x.id===window._poSelectedId);
+  const l=o?.purchase_order_lines.find(x=>x.id===lineId);
+  if(l) l[field]=val;
+  poRenderDetail();
+}
+async function poPayFieldSave(inp){
+  const payId=+inp.dataset.popay, field=inp.dataset.field;
+  const val= field==="amount" ? (+inp.value||0) : inp.value;
+  const {error}=await db.from("purchase_order_payments").update({[field]:val}).eq("id",payId);
+  const m=$("poDetailMsg");
+  if(error){ m.textContent="Not saved \u2014 "+error.message; m.className="msg err"; return; }
+  const o=(window._poCache||[]).find(x=>x.id===window._poSelectedId);
+  const p=o?.purchase_order_payments.find(x=>x.id===payId);
+  if(p) p[field]=val;
+  poRenderDetail(); poqRenderCards();
+}
+async function poPayAddInline(id){
+  const {data,error}=await db.from("purchase_order_payments").insert({po_id:id, pay_date:new Date().toISOString().slice(0,10), amount:0, note:null}).select().single();
+  if(error){ $("poDetailMsg").textContent="Not saved \u2014 "+error.message; $("poDetailMsg").className="msg err"; return; }
+  const o=(window._poCache||[]).find(x=>x.id===id);
+  if(o){ o.purchase_order_payments=o.purchase_order_payments||[]; o.purchase_order_payments.push(data); }
+  poRenderDetail(); poqRenderCards();
+}
+async function poPayDel(id){
+  if(!confirm("Remove this payment entry?")) return;
+  await db.from("purchase_order_payments").delete().eq("id",id);
+  const o=(window._poCache||[]).find(x=>x.id===window._poSelectedId);
+  if(o) o.purchase_order_payments=(o.purchase_order_payments||[]).filter(p=>p.id!==id);
+  poRenderDetail(); poqRenderCards();
 }
 async function poCancel(id){
   if(!confirm("Cancel PO-"+id+"? Nothing has been received against it.")) return;
   await db.from("purchase_orders").update({status:"cancelled",in_transit:false}).eq("id",id);
   renderPos();
 }
-async function poCloseShort(id){
-  const reason=prompt("Close PO-"+id+" short \u2014 the outstanding balance will never arrive.\nWhy? (e.g. \u201Cvintage sold out \u2014 supplier credit note 1234\u201D, \u201Cquery 256/25\u201D)");
-  if(reason===null) return;
-  if(!reason.trim()) return alert("A reason is required \u2014 the trail must say why it never came.");
-  await db.from("purchase_orders").update({status:"closed_short",closed_reason:reason.trim(),in_transit:false}).eq("id",id);
+function poCloseShortOpen(id){
+  window._poCloseId=id;
+  $("poCloseNo").textContent="PO-"+id;
+  $("poCloseReason").value="";
+  $("poCloseMsg").textContent=""; $("poCloseMsg").className="msg";
+  $("poCloseWrap").style.display="block";
+}
+async function poCloseConfirm(){
+  const reason=$("poCloseReason").value.trim();
+  const m=$("poCloseMsg");
+  if(!reason){ m.textContent="A reason is required \u2014 the trail must say why it never came."; m.className="msg err"; return; }
+  await db.from("purchase_orders").update({status:"closed_short",closed_reason:reason,in_transit:false}).eq("id",window._poCloseId);
+  $("poCloseWrap").style.display="none";
   renderPos();
 }
-
-/* ---- payments memo ---- */
-async function poPayOpen(id){
-  window._poPayId=id;
-  $("poPayNo").textContent="PO-"+id;
-  $("poPayDate").value=new Date().toISOString().slice(0,10);
-  $("poPayAmt").value=""; $("poPayNote").value="";
-  const m=$("poPayMsg"); m.textContent=""; m.className="msg";
-  await poPayRender();
-  $("poPayWrap").style.display="block";
+function printPo(id){
+  const o=(window._poCache||[]).find(x=>x.id===id); if(!o) return;
+  const lines=o.purchase_order_lines||[];
+  const net=lines.reduce((s,l)=>s+Number(l.cases)*Number(l.case_cost),0);
+  const rows=lines.map(l=>`<tr><td>${esc(l.description)}</td><td class="r">${l.cases}</td><td class="r">${eur(l.case_cost)}</td><td class="r">${eur(Number(l.cases)*Number(l.case_cost))}</td></tr>`).join("");
+  const w=window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>PO-${o.id}</title><style>
+    body{font-family:Georgia,serif;color:#222;margin:2.2cm 2cm;font-size:11pt}
+    .head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #5C1A2E;padding-bottom:.5em;margin-bottom:1.4em}
+    h1{font-size:20pt;color:#5C1A2E;margin:0}
+    .co{font-size:9pt;color:#555;text-align:right;line-height:1.4}
+    .meta{display:flex;justify-content:space-between;margin-bottom:1.6em}
+    .meta div{line-height:1.5}
+    .lbl{font-size:8pt;letter-spacing:.08em;color:#888;text-transform:uppercase}
+    table{width:100%;border-collapse:collapse;font-size:10.5pt}
+    th{font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em;color:#666;text-align:left;border-bottom:1.5px solid #5C1A2E;padding:.35em .4em}
+    td{padding:.35em .4em;border-bottom:1px solid #e5ddd2}
+    .r{text-align:right;font-variant-numeric:tabular-nums}
+    .tot{margin-top:1.2em;text-align:right;line-height:1.7}
+    .tot strong{font-size:13pt}
+    .foot{margin-top:3em;font-size:8pt;color:#999;font-style:italic;border-top:1px solid #e5ddd2;padding-top:.6em}
+  </style></head><body>
+  <div class="head"><h1>Moores&rsquo; Wines</h1><div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
+  <div class="meta">
+    <div><span class="lbl">Supplier</span><br>${esc(o.suppliers?.name||"")}</div>
+    <div style="text-align:right"><span class="lbl">Purchase order</span><br><strong>No. PO-${o.id}</strong><br>${o.order_date}${o.reference?"<br>Ref: "+esc(o.reference):""}</div>
+  </div>
+  <table><thead><tr><th>Wine</th><th class="r">Cases</th><th class="r">Cost/case &euro;</th><th class="r">Total &euro;</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div class="tot">Net: &euro;${eur(net)}<br>VAT: &euro;0.00<br><strong>Total: &euro;${eur(net)}</strong></div>
+  <div class="foot">Moores&rsquo; Wines Stock Book \u2014 ${new Date().toISOString().slice(0,10)}</div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
 }
-function poPayClose(){ $("poPayWrap").style.display="none"; renderPos(); }
-async function poPayRender(){
-  const id=window._poPayId;
-  const {data:pays}=await db.from("purchase_order_payments").select("*").eq("po_id",id).order("pay_date");
-  const {data:lines}=await db.from("purchase_order_lines").select("cases,case_cost").eq("po_id",id);
-  const total=(lines||[]).reduce((s,l)=>s+Number(l.cases)*Number(l.case_cost),0);
-  const paid=(pays||[]).reduce((s,p)=>s+Number(p.amount),0);
-  $("poPaySummary").innerHTML="Paid <strong>\u20AC"+eur(paid)+"</strong> of \u20AC"+eur(total)+" order value.";
-  $("poPayList").innerHTML=(pays||[]).map(p=>`<tr><td class="dim">${p.pay_date}</td><td class="num">${eur(p.amount)}</td><td>${esc(p.note||"")}</td>
-    <td><button onclick="poPayDel(${p.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.15rem .5rem;cursor:pointer">\u2715</button></td></tr>`).join("")
-    ||"<tr><td colspan=4 class='dim'>No payments recorded.</td></tr>";
-}
-async function poPayAdd(){
-  const m=$("poPayMsg"); m.className="msg";
-  const amt=+$("poPayAmt").value||0;
-  if(amt<=0){ m.textContent="Enter the amount."; m.className="msg err"; return; }
-  const {error}=await db.from("purchase_order_payments").insert({
-    po_id:window._poPayId, pay_date:$("poPayDate").value, amount:amt, note:$("poPayNote").value.trim()||null});
-  if(error){ m.textContent="Not saved \u2014 "+error.message+" (has bundle_b2.sql been run?)"; m.className="msg err"; return; }
-  $("poPayAmt").value=""; $("poPayNote").value="";
-  m.textContent="Payment recorded."; m.className="msg ok";
-  poPayRender();
-}
-async function poPayDel(id){
-  if(!confirm("Remove this payment entry?")) return;
-  await db.from("purchase_order_payments").delete().eq("id",id);
-  poPayRender();
+function exportPoCsv(id){
+  const o=(window._poCache||[]).find(x=>x.id===id); if(!o) return;
+  const rows=[["Wine","Cases","Cost/case","Line total","Outstanding"]];
+  (o.purchase_order_lines||[]).forEach(l=>rows.push([l.description,l.cases,l.case_cost,(Number(l.cases)*Number(l.case_cost)).toFixed(2),poLineOut(l)]));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="PO-"+id+".csv"; a.click();
 }
 
 /* ---- receive a delivery (supplier-wide, spans POs) ---- */
