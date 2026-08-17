@@ -478,15 +478,17 @@
         <div><label for="siFile">Invoice PDF</label><input id="siFile" type="file" accept="application/pdf" disabled></div>
       </div>
       <div class="msg" id="siMsg"></div>
+      <p id="siSourceLink" style="display:none;margin:.3rem 0"><a href="#" id="siSourceLinkA" target="_blank" style="color:var(--claret)">View the source PDF \u2197</a></p>
+      <div id="siDupWarning" style="display:none;background:#FAEEDA;color:#854F0B;border-radius:6px;padding:.55rem .8rem;font-size:.85rem;margin:.4rem 0"></div>
       <div id="siResults" style="display:none">
         <div class="grid3" style="margin:.6rem 0">
           <div><label for="siDate">Received date</label><input id="siDate" type="date"></div>
           <div><label for="siLoc">Into location</label><select id="siLoc"></select></div>
-          <div><label for="siInvNo">Invoice number</label><input id="siInvNo"></div>
+          <div><label for="siInvNo">Invoice number</label><input id="siInvNo" onchange="siCheckDuplicate()"></div>
         </div>
         <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden">
           <div style="display:grid;grid-template-columns:1fr 1fr;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600;padding:.5rem .75rem;border-bottom:1px solid var(--line)">
-            <div>Supplier's description</div><div style="padding-left:1rem;border-left:1px solid var(--line)">Matched to</div>
+            <div>Supplier's description</div><div style="padding-left:1rem;border-left:1px solid var(--line)">Wine on our side</div>
           </div>
           <div id="siBody"></div>
         </div>
@@ -542,6 +544,10 @@
       <div class="grid2">
         <div><label for="npBic">Bottles per case</label><input id="npBic" type="number" min="1" value="12"></div>
         <div><label for="npMl">Bottle size (ml)</label><input id="npMl" type="number" value="750"></div>
+      </div>
+      <div class="grid2">
+        <div><label for="npSupCode">Supplier's code <span style="text-transform:none;font-weight:400">(optional \u2014 if they use one)</span></label><input id="npSupCode" placeholder="e.g. CH-DALEM-18"></div>
+        <div></div>
       </div>
       <div class="grid2">
         <div><label for="npCost">Case cost € (ex duty)</label><input id="npCost" type="number" min="0" step="0.01" value="0"></div>
@@ -727,7 +733,7 @@
     </div>
     <div class="wrap"><table>
       <thead><tr>
-        <th>Code</th><th>Wine</th><th>Region</th><th class="num">Btls/case</th><th class="num">Bottle ml</th>
+        <th>Code</th><th>Wine</th><th>Region</th><th>Supplier code</th><th class="num">Btls/case</th><th class="num">Bottle ml</th>
         <th class="num">Case cost €</th><th class="num">Duty/case €</th><th class="num">List price €</th>
       </tr></thead>
       <tbody id="prodBody"></tbody>
@@ -814,7 +820,7 @@ async function loadRefData(){
   const [locs, cats, prods, comps] = await Promise.all([
     fetchAll("locations","id,name,duty_status","id"),
     fetchAll("duty_categories","id,name,duty_per_case","id"),
-    fetchAll("products","id,name,supplier_id,bottles_in_case,bottle_size_ml,case_cost,case_price,duty_category_id,obsolete,tags","name"),
+    fetchAll("products","id,name,supplier_id,bottles_in_case,bottle_size_ml,case_cost,case_price,duty_category_id,obsolete,tags,supplier_code","name"),
     fetchAll("product_components","id,pack_id,component_id,qty_bottles").catch(()=>[]),
   ]);
   locations = locs;
@@ -1061,6 +1067,7 @@ function renderProducts(){
   $("prodBody").innerHTML = rows.map(p=>{
     const duty = dutyCats[p.duty_category_id]?.duty_per_case;
     return `<tr${p.obsolete?' style="opacity:.55"':''}><td class="dim">${p.id}</td><td style="cursor:pointer;color:var(--claret);text-decoration:underline dotted" onclick="openDrill(${p.id})">${esc(p.name)}</td><td class="dim">${esc(tagOf(p))}</td>
+      <td><input value="${esc(p.supplier_code||"")}" placeholder="\u2014" data-scprod="${p.id}" onchange="prodSupplierCodeSave(this)" style="width:100px;padding:.25rem .35rem;border:1px solid var(--line);border-radius:5px;font-size:.85rem"></td>
       <td class="num">${p.bottles_in_case}</td><td class="num">${p.bottle_size_ml}</td>
       <td class="num">${eur(p.case_cost)}</td><td class="num">${eur(duty)}</td><td class="num">${eur(p.case_price)}</td></tr>`;
   }).join("");
@@ -1069,6 +1076,12 @@ function renderProducts(){
 }
 $("prodSearch").oninput = renderProducts;
 $("prodShowOld").onchange = renderProducts;
+async function prodSupplierCodeSave(inp){
+  const pid=+inp.dataset.scprod, val=inp.value.trim()||null;
+  const {error}=await db.from("products").update({supplier_code:val}).eq("id",pid);
+  if(error){ alert("Not saved \u2014 "+error.message+" (has bundle_c3.sql been run?)"); return; }
+  const p=products.find(x=>x.id===pid); if(p) p.supplier_code=val;
+}
 
 /* ==================== DRILL-DOWN ==================== */
 async function openDrill(pid){
@@ -1172,6 +1185,7 @@ $("npSave").onclick = async ()=>{
   const {data:prod, error:e1} = await db.from("products").insert({
     name, supplier_id: sup?sup.id:null, bottles_in_case:bic, bottle_size_ml:+$("npMl").value||750,
     duty_category_id:+$("npDuty").value, case_cost:+$("npCost").value||0, case_price:+$("npPrice").value||0,
+    supplier_code: $("npSupCode").value.trim()||null,
     obsolete:false, tags: isPack ? "Gift packs & composites" : $("npTag").value.trim()}).select().single();
   if(e1){ $("npSave").disabled=false; return fail("Not saved — "+e1.message); }
   if(isPack){
@@ -1183,7 +1197,7 @@ $("npSave").onclick = async ()=>{
   $("npSave").disabled=false;
   if(npOnCreated){
     const cb=npOnCreated;
-    $("npName").value=""; $("npCost").value=0; $("npPrice").value=0; $("pkLines").innerHTML="";
+    $("npName").value=""; $("npCost").value=0; $("npPrice").value=0; $("npSupCode").value=""; $("pkLines").innerHTML="";
     $("npIsPack").checked=false; $("npPackWrap").style.display="none";
     renderProducts();
     closeNp();
@@ -1192,7 +1206,7 @@ $("npSave").onclick = async ()=>{
   }
   m.textContent=(isPack?"Gift set":"Product")+" created — code "+prod.id+". It is now in the wine list and every picker.";
   m.className="msg ok";
-  $("npName").value=""; $("npCost").value=0; $("npPrice").value=0; $("pkLines").innerHTML="";
+  $("npName").value=""; $("npCost").value=0; $("npPrice").value=0; $("npSupCode").value=""; $("pkLines").innerHTML="";
   $("npIsPack").checked=false; $("npPackWrap").style.display="none";
   renderProducts();
 };
@@ -2418,13 +2432,24 @@ async function poRenderDetail(){
       <td class="num">${poLineOut(l)%1?poLineOut(l).toFixed(1):poLineOut(l)} out</td></tr>`;
   }).join("");
 
-  const {data:receipts} = await db.from("stock_movements").select("movement_date,qty_bottles,rotation_number,product_id,to_location_id").eq("reference","PO-"+o.id).eq("movement_type","receipt").order("movement_date");
+  const {data:receipts} = await db.from("stock_movements").select("movement_date,qty_bottles,rotation_number,product_id,to_location_id,supplier_invoice_id").eq("reference","PO-"+o.id).eq("movement_type","receipt").order("movement_date");
   const lname = id => (locations.find(l=>l.id===id)||{}).name||"\u2014";
+  const invIds=[...new Set((receipts||[]).map(r=>r.supplier_invoice_id).filter(Boolean))];
+  let invLinkMap={};
+  if(invIds.length){
+    const {data:invs}=await db.from("supplier_invoices").select("id,storage_path").in("id",invIds);
+    for(const inv of (invs||[])){
+      if(!inv.storage_path) continue;
+      const {data:signed}=await db.storage.from("supplier-invoices").createSignedUrl(inv.storage_path,3600);
+      if(signed?.signedUrl) invLinkMap[inv.id]=signed.signedUrl;
+    }
+  }
   const receiptRows = (receipts||[]).map(r=>{
     const p=products.find(x=>x.id===r.product_id);
     const bic=p?p.bottles_in_case:12;
     const cases=r.qty_bottles/bic;
-    return `<div class="plainrow" style="font-size:.9rem;padding:.35rem 0;border-top:1px solid var(--line)">${r.movement_date} \u2014 ${esc(p?p.name:"#"+r.product_id)} \u2014 ${cases%1?cases.toFixed(1):cases} case${cases===1?"":"s"}${r.rotation_number?" \u00B7 rot "+esc(r.rotation_number):""} \u00B7 ${esc(lname(r.to_location_id))}</div>`;
+    const link = r.supplier_invoice_id && invLinkMap[r.supplier_invoice_id] ? ` \u00B7 <a href="${invLinkMap[r.supplier_invoice_id]}" target="_blank" style="color:var(--claret)">invoice \u2197</a>` : "";
+    return `<div class="plainrow" style="font-size:.9rem;padding:.35rem 0;border-top:1px solid var(--line)">${r.movement_date} \u2014 ${esc(p?p.name:"#"+r.product_id)} \u2014 ${cases%1?cases.toFixed(1):cases} case${cases===1?"":"s"}${r.rotation_number?" \u00B7 rot "+esc(r.rotation_number):""} \u00B7 ${esc(lname(r.to_location_id))}${link}</div>`;
   }).join("") || "<p class='hint' style='margin:.3rem 0'>Nothing received yet.</p>";
 
   const payRows = (o.purchase_order_payments||[]).map(p=>`
@@ -2608,9 +2633,17 @@ async function rdLoadLines(){
   }));
   $("rdLines").innerHTML=window._rdLines.map((r,i)=>{
     const out=poLineOut(r.line);
+    const prod=products.find(x=>x.id===r.line.product_id);
+    const catCost=prod?Number(prod.case_cost):null;
+    const lineCost=Number(r.line.case_cost);
+    const diffs = catCost!=null && Math.abs(catCost-lineCost)>0.005;
+    const syncRow = diffs ? `<label style="display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:#854F0B;margin-top:2px;cursor:pointer">
+        <input type="checkbox" class="rdSyncCost" data-rd="${i}" style="width:auto"> Update catalogue cost to \u20AC${lineCost.toFixed(2)} (currently \u20AC${catCost.toFixed(2)})
+      </label>` : "";
     return `<div style="display:grid;grid-template-columns:3fr 100px 150px;gap:.5rem;align-items:end" data-rd="${i}">
       <div style="align-self:center">${esc(r.line.description)}${r.line.note?" \u00B7 "+esc(r.line.note):""}
-        <span class="dim">\u2014 PO-${r.po_id} \u00B7 ${out%1?out.toFixed(1):out} of ${r.line.cases} cases outstanding${r.exp?" \u00B7 exp "+r.exp:""}</span></div>
+        <span class="dim">\u2014 PO-${r.po_id} \u00B7 ${out%1?out.toFixed(1):out} of ${r.line.cases} cases outstanding${r.exp?" \u00B7 exp "+r.exp:""}</span>
+        ${syncRow}</div>
       <div><label>Cases in</label><input class="rdCases" type="number" min="0" step="1" value="0"></div>
       <div><label>Rotation no.</label><input class="rdRot" placeholder="from landing advice"></div>
     </div>`;
@@ -2625,6 +2658,7 @@ async function rdSave(){
     r: window._rdLines[+div.dataset.rd],
     cases:+div.querySelector(".rdCases").value||0,
     rot:div.querySelector(".rdRot").value.trim()||null,
+    syncCost: div.querySelector(".rdSyncCost")?.checked||false,
   })).filter(x=>x.cases>0);
   if(!recv.length) return fail("Enter cases received on at least one line.");
   $("rdSaveBtn").disabled=true;
@@ -2656,6 +2690,12 @@ async function rdSave(){
     const done=(fresh||[]).every(l=>Number(l.bottles_received||0)>=Number(l.cases)*poBic(l.product_id));
     await db.from("purchase_orders").update(done?{status:"received",in_transit:false}:{status:"part_received"}).eq("id",pid);
   }
+  for(const x of recv){
+    if(!x.syncCost) continue;
+    const newCost=Number(x.r.line.case_cost);
+    await db.from("products").update({case_cost:newCost}).eq("id",x.r.line.product_id);
+    const p=products.find(pp=>pp.id===x.r.line.product_id); if(p) p.case_cost=newCost;
+  }
   $("rdSaveBtn").disabled=false;
   m.textContent="Receipts posted \u2014 "+recv.reduce((s,x)=>s+x.cases,0)+" cases into stock across "+poIds.length+" PO"+(poIds.length===1?"":"s")+"."; m.className="msg ok";
   setTimeout(()=>{ rdClose(); renderPos(); },900);
@@ -2681,6 +2721,9 @@ async function siOpen(){
   });
   $("siFile").value=""; $("siFile").disabled=true;
   $("siResults").style.display="none";
+  $("siSourceLink").style.display="none";
+  $("siDupWarning").style.display="none";
+  if(window._siFileURL){ URL.revokeObjectURL(window._siFileURL); window._siFileURL=null; }
   const m=$("siMsg"); m.textContent=""; m.className="msg";
   $("siWrap").style.display="block";
 }
@@ -2698,10 +2741,26 @@ async function siLoadPO(supId){
   $("siMsg").textContent = siOpenLines.length ? "" : "No open PO lines for this supplier \u2014 upload anyway if you expect a new one.";
   $("siMsg").className="msg";
 }
+async function siCheckDuplicate(){
+  const num=$("siInvNo").value.trim();
+  const supId=+$("siSup").dataset.sid;
+  const box=$("siDupWarning");
+  if(!num||!supId){ box.style.display="none"; return; }
+  const {data}=await db.from("supplier_invoices").select("id,invoice_date,status").eq("supplier_id",supId).eq("invoice_number",num).limit(3);
+  if(data&&data.length){
+    box.innerHTML = "This invoice number already exists for this supplier \u2014 uploaded "+esc(data[0].invoice_date||"")+
+      " (status: "+esc(data[0].status||"")+"). If this is a genuine re-send or correction you can continue, otherwise check before posting again.";
+    box.style.display="block";
+  } else box.style.display="none";
+}
 $("siFile").onchange = async ()=>{
   const f=$("siFile").files[0]; if(!f) return;
   const supId=+$("siSup").dataset.sid; const sup=(window._supAll||[]).find(s=>s.id===supId);
   const m=$("siMsg"); m.className="msg ok"; m.textContent="Reading the invoice\u2026";
+  if(window._siFileURL){ URL.revokeObjectURL(window._siFileURL); }
+  window._siFileURL = URL.createObjectURL(f);
+  $("siSourceLinkA").href = window._siFileURL;
+  $("siSourceLink").style.display="block";
   let rawLines=[];
   try{ rawLines = await pdfToLines(f); }
   catch(e){ m.textContent="Couldn't read that PDF \u2014 "+e.message; m.className="msg err"; return; }
@@ -2719,73 +2778,88 @@ $("siFile").onchange = async ()=>{
   if(!parsed || !parsed.lines || !parsed.lines.length){ m.textContent="Claude found no line items on that invoice."; m.className="msg err"; return; }
   $("siInvNo").value = parsed.invoiceNumber||"";
   if(parsed.invoiceDate) $("siDate").value = parsed.invoiceDate;
-  siLines = parsed.lines.map(pl=>{
-    const conf = pl.confidence==="high" ? "high" : "low";
-    let status, openLine=null;
-    if(!pl.matchedProductId){
-      status = "unmatched";
-    } else if(conf==="low"){
-      status = "possible";
-    } else {
-      const cands = siOpenLines.filter(o=>o.line.product_id===pl.matchedProductId);
-      if(cands.length>1){
-        status = "choose_po"; openLine=null;
-      } else if(cands.length===1){
-        openLine=cands[0];
-        const out=poLineOut(openLine.line);
-        status = (Math.abs(out-Number(pl.cases))<0.01) ? "matched" : "qtydiff";
-      } else {
-        status = "possible"; // Claude's confident about the wine, but it's not on any open PO
-      }
-    }
-    return {...pl, po_line:openLine, status, candidateId:pl.matchedProductId||null};
-  });
+  siCheckDuplicate();
+  siLines = parsed.lines.map(pl=>({
+    description: pl.description, cases: Number(pl.cases)||0, caseCost: Number(pl.caseCost)||0,
+    candidateId: pl.matchedProductId||null, confirmed:false, po_line:null, matchedProductId:null, status:"review"
+  }));
   siRender();
-  m.textContent="Read "+siLines.length+" line"+(siLines.length===1?"":"s")+" \u2014 review the matches below before posting.";
+  m.textContent="Read "+siLines.length+" line"+(siLines.length===1?"":"s")+" \u2014 check the wine and quantity on each line, then confirm.";
   m.className="msg ok";
   $("siResults").style.display="block";
 };
 function siProdName(id){ const p=products.find(x=>x.id===id); return p?p.name:("#"+id); }
-function siRender(){
+function siWireLinePicker(i){
+  const inp=$("siPick"+i), ul=inp?.nextElementSibling;
+  if(!inp||inp.dataset.wired) return; inp.dataset.wired="1";
   const supId=+$("siSup").dataset.sid;
   const supProducts = products.filter(p=>p.supplier_id===supId && !p.obsolete);
+  inp.dataset.pid = siLines[i].candidateId||"";
+  wirePicker(inp, ul, {
+    minChars:1,
+    getHits:q=>supProducts.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())||String(p.id).includes(q)||(p.supplier_code||"").toLowerCase().includes(q.toLowerCase())).slice(0,12),
+    renderLi:p=>`${p.id} \u2014 ${esc(p.name)}${p.supplier_code?" <span class='cs'>("+esc(p.supplier_code)+")</span>":""}`,
+    onDirty:()=>{ inp.dataset.pid=""; },
+    onPick:p=>{ inp.value=p.name; inp.dataset.pid=p.id; siLines[i].candidateId=p.id; $("siConfirmErr"+i).textContent=""; }
+  });
+}
+function siRender(){
   $("siBody").innerHTML = siLines.map((l,i)=>{
     const left = `<div style="font-size:.9rem">${esc(l.description||"")}</div>
-      <div style="font-size:.78rem;color:#9A8F84;margin-top:2px">${l.cases} case${l.cases===1?"":"s"} \u00B7 \u20ac${Number(l.caseCost||0).toFixed(2)}/case</div>`;
-    let matchedName = l.candidateId ? "#"+l.candidateId+" "+esc(siProdName(l.candidateId)) : "";
+      <div style="font-size:.78rem;color:#9A8F84;margin-top:2px">\u20ac${Number(l.caseCost||0).toFixed(2)}/case</div>`;
     let right;
-    if(l.status==="matched"){
-      right = `<div style="font-size:.9rem">${matchedName}</div>
-        <span style="display:inline-block;margin-top:6px;background:#e1f5ee;color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">Matched</span>`;
-    } else if(l.status==="qtydiff"){
-      const out = l.po_line ? " \u2014 "+poLineOut(l.po_line.line)+" outstanding" : "";
-      right = `<div style="font-size:.9rem">${matchedName}</div>
-        <span style="display:inline-block;margin-top:6px;background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">Qty differs${out}</span>`;
+    if(!l.confirmed){
+      const startName = l.candidateId ? siProdName(l.candidateId) : "";
+      right = `<div class="picker"><input id="siPick${i}" value="${esc(startName)}" placeholder="type to find the wine\u2026" autocomplete="off" data-i="${i}"><ul style="display:none"></ul></div>
+        <div style="display:flex;align-items:center;gap:.4rem;margin-top:6px">
+          <label style="font-size:.76rem;color:#9A8F84;text-transform:none;margin:0">Cases</label>
+          <input value="${l.cases}" oninput="siLines[${i}].cases=+this.value||0" type="number" min="0" step="1" style="width:64px;padding:.25rem .35rem">
+        </div>
+        <div style="margin-top:6px"><button onclick="siConfirmLine(${i})" style="border:1px solid var(--claret);background:var(--claret);color:#F6EDE4;border-radius:5px;padding:.25rem .7rem;cursor:pointer;font-size:.8rem">Confirm</button></div>
+        <div id="siConfirmErr${i}" style="color:#A03030;font-size:.76rem;margin-top:3px"></div>`;
     } else if(l.status==="choose_po"){
       const cands = siOpenLines.filter(o=>o.line.product_id===l.candidateId);
-      right = `<div style="font-size:.9rem">${matchedName}</div>
+      right = `<div style="font-size:.9rem">#${l.candidateId} ${esc(siProdName(l.candidateId))}</div>
         <div style="font-size:.78rem;color:#9A8F84;margin:4px 0 6px">On more than one open PO \u2014 which is this for?</div>
-        <div>${cands.map((c,ci)=>`<label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;padding:.15rem 0;cursor:pointer">
+        <div>${cands.map(c=>`<label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;padding:.15rem 0;cursor:pointer">
           <input type="radio" name="sipo${i}" onclick="siChoosePO(${i},${c.po_id})"> PO-${c.po_id} \u2014 ${poLineOut(c.line)} outstanding${c.exp?" \u00B7 exp "+c.exp:""}</label>`).join("")}</div>`;
-    } else if(l.status==="possible"){
-      right = `<div style="font-size:.9rem">Possible match: ${matchedName}</div>
-        <span style="display:inline-block;margin-top:6px;background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">Needs confirming</span>
-        <div style="margin-top:6px">
-          <button onclick="siConfirm(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;margin-right:.3rem">Confirm</button>
-          <button onclick="siReject(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem">Not this</button>
-        </div>`;
     } else {
-      const opts = '<option value="">\u2014 pick the wine \u2014</option>'+supProducts.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
-      right = `<span style="display:inline-block;background:#fcebeb;color:#a32d2d;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">No product match</span>
-        <select onchange="siManualPick(${i},this.value)" style="display:block;margin-top:6px;font-size:.8rem;padding:.2rem;width:100%">${opts}</select>`;
+      const badge = l.status==="matched"
+        ? "<span style='background:#e1f5ee;color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Confirmed \u2014 matched</span>"
+        : "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Confirmed \u2014 qty differs"+(l.po_line?" ("+poLineOut(l.po_line.line)+" outstanding)":"")+"</span>";
+      let syncBlock="";
+      const p=products.find(x=>x.id===l.candidateId);
+      if(p && Math.abs(Number(p.case_cost)-Number(l.caseCost))>0.005){
+        syncBlock = `<label style="display:flex;align-items:center;gap:.35rem;font-size:.76rem;color:#854F0B;margin-top:6px;cursor:pointer">
+          <input type="checkbox" data-synccost="${i}" style="width:auto"> Update catalogue cost to \u20AC${Number(l.caseCost).toFixed(2)} (currently \u20AC${Number(p.case_cost).toFixed(2)})
+        </label>`;
+      }
+      right = `<div style="font-size:.9rem">#${l.candidateId} ${esc(siProdName(l.candidateId))} \u00B7 ${l.cases} case${l.cases===1?"":"s"}</div>
+        ${badge}${syncBlock}
+        <div style="margin-top:6px"><button onclick="siChangeMatch(${i})" style="background:none;border:none;color:#9A8F84;text-decoration:underline;cursor:pointer;font-size:.76rem;padding:0">Change match</button></div>`;
     }
     return `<div style="display:grid;grid-template-columns:1fr 1fr;padding:.6rem .75rem;border-top:1px solid var(--line)">
       <div>${left}</div><div style="padding-left:1rem;border-left:1px solid var(--line)">${right}</div></div>`;
   }).join("");
-  const postable = siLines.filter(l=>l.status==="matched"||l.status==="qtydiff").length;
+  siLines.forEach((l,i)=>{ if(!l.confirmed) siWireLinePicker(i); });
+  const postable = siLines.filter(l=>l.confirmed&&(l.status==="matched"||l.status==="qtydiff")).length;
   $("siPostHint").textContent = postable<siLines.length
     ? (siLines.length-postable)+" line"+(siLines.length-postable===1?"":"s")+" won't post until confirmed and matched to a PO."
     : "";
+}
+async function siConfirmLine(i){
+  const l=siLines[i];
+  const errBox=$("siConfirmErr"+i);
+  if(!l.candidateId){ errBox.textContent="Pick the wine first."; return; }
+  if(!l.cases || l.cases<=0){ errBox.textContent="Enter the number of cases."; return; }
+  errBox.textContent="";
+  l.confirmed=true;
+  await siResolveToPO(i);
+}
+function siChangeMatch(i){
+  siLines[i].confirmed=false; siLines[i].status="review"; siLines[i].po_line=null; siLines[i].matchedProductId=null;
+  const inp=$("siPick"+i); if(inp) inp.dataset.wired="";
+  siRender();
 }
 function siChoosePO(i,poId){
   const l=siLines[i];
@@ -2808,32 +2882,24 @@ async function siResolveToPO(i){
     siRender(); return;
   }
   const {data:openPos}=await db.from("purchase_orders").select("id").eq("supplier_id",supId).in("status",["open","part_received"]).order("id",{ascending:false}).limit(1);
-  if(!openPos||!openPos.length){ alert("No open PO for this supplier to add the line to \u2014 create one first from Purchase orders."); return; }
+  if(!openPos||!openPos.length){ alert("No open PO for this supplier to add the line to \u2014 create one first from Purchase orders."); siLines[i].confirmed=false; siRender(); return; }
   const poId=openPos[0].id;
   const {data:newLine,error}=await db.from("purchase_order_lines").insert({
     po_id:poId, product_id:l.candidateId, description:l.description, cases:l.cases, case_cost:l.caseCost||0, bottles_received:0
   }).select().single();
-  if(error){ alert("Couldn't add line: "+error.message); return; }
+  if(error){ alert("Couldn't add line: "+error.message); siLines[i].confirmed=false; siRender(); return; }
   await db.from("purchase_orders").update({status:"part_received"}).eq("id",poId).eq("status","open");
   siOpenLines.push({po_id:poId, line:newLine});
   siLines[i].matchedProductId=l.candidateId; siLines[i].status="matched"; siLines[i].po_line={po_id:poId, line:newLine};
   siRender();
 }
-function siConfirm(i){ siResolveToPO(i); }
-function siReject(i){ siLines[i].candidateId=null; siLines[i].matchedProductId=null; siLines[i].status="unmatched"; siRender(); }
-function siManualPick(i,val){
-  if(!val) return;
-  siLines[i].candidateId=+val;
-  siResolveToPO(i);
-}
-async function siAddToPO(i){ siResolveToPO(i); }
 async function siPost(){
   const m=$("siMsg"); m.className="msg";
   const fail=t=>{m.textContent=t;m.className="msg err";};
   const locId=+$("siLoc").value||null;
   if(!locId) return fail("Pick the location the stock arrived into.");
-  const toPost = siLines.filter(l=>l.status==="matched"||l.status==="qtydiff");
-  if(!toPost.length) return fail("Nothing matched to a PO yet \u2014 match or add lines first.");
+  const toPost = siLines.filter(l=>l.confirmed&&(l.status==="matched"||l.status==="qtydiff"));
+  if(!toPost.length) return fail("Nothing confirmed and matched to a PO yet.");
   $("siPostBtn").disabled=true;
   const supId=+$("siSup").dataset.sid;
   const siFileObj=$("siFile").files[0];
@@ -2857,9 +2923,9 @@ async function siPost(){
   const invLines = toPost.map(l=>({ invoice_id:inv.id, product_id:l.matchedProductId, description:l.description,
     cases:l.cases, case_cost:l.caseCost||0, po_line_id:l.po_line.line.id, match_status:l.status, posted:true }));
   await db.from("supplier_invoice_lines").insert(invLines);
-  const unmatched = siLines.filter(l=>l.status==="unmatched").map(l=>({ invoice_id:inv.id, product_id:l.matchedProductId||null,
-    description:l.description, cases:l.cases, case_cost:l.caseCost||0, po_line_id:null, match_status:"unmatched", posted:false }));
-  if(unmatched.length) await db.from("supplier_invoice_lines").insert(unmatched);
+  const unconfirmed = siLines.filter(l=>!l.confirmed||!(l.status==="matched"||l.status==="qtydiff")).map(l=>({ invoice_id:inv.id, product_id:l.candidateId||null,
+    description:l.description, cases:l.cases, case_cost:l.caseCost||0, po_line_id:null, match_status:"unconfirmed", posted:false }));
+  if(unconfirmed.length) await db.from("supplier_invoice_lines").insert(unconfirmed);
   for(const l of toPost){
     await db.from("purchase_order_lines").update({
       bottles_received: Number(l.po_line.line.bottles_received||0)+l.cases*poBic(l.matchedProductId)}).eq("id",l.po_line.line.id);
@@ -2870,8 +2936,17 @@ async function siPost(){
     const done=(fresh||[]).every(l=>Number(l.bottles_received||0)>=Number(l.cases)*poBic(l.product_id));
     await db.from("purchase_orders").update(done?{status:"received",in_transit:false}:{status:"part_received"}).eq("id",pid);
   }
+  for(let i=0;i<siLines.length;i++){
+    const l=siLines[i];
+    if(!(l.confirmed&&(l.status==="matched"||l.status==="qtydiff"))) continue;
+    const cb=document.querySelector(`[data-synccost="${i}"]`);
+    if(cb&&cb.checked){
+      await db.from("products").update({case_cost:l.caseCost}).eq("id",l.candidateId);
+      const p=products.find(pp=>pp.id===l.candidateId); if(p) p.case_cost=l.caseCost;
+    }
+  }
   $("siPostBtn").disabled=false;
-  m.textContent="Receipt posted from invoice \u2014 "+toPost.reduce((s,l)=>s+Number(l.cases),0)+" cases into stock."+(unmatched.length?" "+unmatched.length+" line(s) left unposted.":"");
+  m.textContent="Receipt posted from invoice \u2014 "+toPost.reduce((s,l)=>s+Number(l.cases),0)+" cases into stock."+(unconfirmed.length?" "+unconfirmed.length+" line(s) left unposted.":"");
   m.className="msg ok";
   setTimeout(()=>{ siClose(); renderPos(); },1100);
 }
