@@ -404,14 +404,14 @@
         <button class="btn" style="margin-left:auto;background:#7A6E63" onclick="siOpen()">Upload supplier invoice</button>
         <button class="btn" onclick="rdOpen()">Receive delivery</button>
       </div>
-      <div style="display:grid;grid-template-columns:290px 1fr;gap:1rem;margin-top:.8rem;align-items:start">
-        <div>
+      <div style="display:grid;grid-template-columns:290px 1fr;gap:1.75rem;margin-top:.9rem;align-items:start">
+        <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:.9rem">
           <input id="poqSearch" placeholder="Search PO number or supplier&hellip;" style="margin-bottom:.5rem">
           <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.6rem" id="poqChips"></div>
-          <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;max-height:70vh;overflow-y:auto" id="poCardList"></div>
+          <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;max-height:68vh;overflow-y:auto;background:#fff" id="poCardList"></div>
         </div>
-        <div id="poDetailWrap">
-          <p class="hint" style="margin:1.5rem 0">Pick a purchase order on the left to see it here.</p>
+        <div id="poDetailWrap" style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:1.2rem 1.5rem">
+          <p class="hint" style="margin:.5rem 0">Pick a purchase order on the left to see it here.</p>
         </div>
       </div>
     </div>
@@ -2403,7 +2403,7 @@ function poqRenderCards(){
     </div>`;
   }).join("") || "<p class='hint' style='padding:.8rem'>No purchase orders match.</p>";
 }
-function poSelect(id){ window._poSelectedId=id; poqRenderCards(); poRenderDetail(); }
+function poSelect(id){ window._poSelectedId=id; window._poDetailMinimized=false; poqRenderCards(); poRenderDetail(); }
 
 async function poRenderDetail(){
   const wrap=$("poDetailWrap");
@@ -2460,10 +2460,18 @@ async function poRenderDetail(){
       <button onclick="poPayDel(${p.id})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem" title="Delete payment">\u2715</button>
     </div>`).join("");
 
+  const minimized = window._poDetailMinimized;
   wrap.innerHTML = `
-    <h2 class="serif" style="font-size:1.3rem;margin:0 0 .25rem;display:flex;align-items:baseline;gap:.6rem">PO-${o.id} &mdash; ${esc(o.suppliers?.name||"")} ${poStatusTag(o.status)}</h2>
+    <div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.25rem">
+      <h2 class="serif" style="font-size:1.3rem;margin:0;display:flex;align-items:baseline;gap:.6rem">PO-${o.id} &mdash; ${esc(o.suppliers?.name||"")} ${poStatusTag(o.status)}</h2>
+      <div style="margin-left:auto;display:flex;gap:.4rem">
+        <button onclick="poDetailToggleMin()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.25rem .7rem;cursor:pointer;font-size:.8rem">${minimized?"Expand":"Minimize"}</button>
+        <button onclick="poDetailClose()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.25rem .7rem;cursor:pointer;font-size:.8rem">Close</button>
+      </div>
+    </div>
     <p class="hint" style="margin:0 0 .8rem">${o.order_date}${o.reference?" \u00B7 ref "+esc(o.reference):""}${o.expected_date?" \u00B7 expected "+o.expected_date:""}</p>
-    <p style="margin:0 0 1rem"><span class="tag" style="background:${paid>=net&&net>0?'var(--claret)':paid>0?'#B08D2E':'#A03030'};color:#fff">PAID \u20AC${eur(paid)} OF \u20AC${eur(net)}</span></p>
+    <p style="margin:0 0 ${minimized?"0":"1rem"}"><span class="tag" style="background:${paid>=net&&net>0?'var(--claret)':paid>0?'#B08D2E':'#A03030'};color:#fff">PAID \u20AC${eur(paid)} OF \u20AC${eur(net)}</span></p>
+    ${minimized?"":`
 
     <div class="grid3" style="margin-bottom:1rem">
       <div><label>Reference</label><input id="podRef" value="${esc(o.reference||"")}" onchange="poHeaderFieldSave(${o.id},'reference',this.value)"></div>
@@ -2495,9 +2503,12 @@ async function poRenderDetail(){
       <button class="btn" style="margin-top:0;background:none;border:1px solid var(--line);color:var(--ink)" onclick="printPo(${o.id})">Print</button>
       <button class="btn" style="margin-top:0;background:none;border:1px solid var(--line);color:var(--ink)" onclick="exportPoCsv(${o.id})">Export CSV</button>
     </div>
+    `}
     <div class="msg" id="poDetailMsg"></div>
   `;
 }
+function poDetailToggleMin(){ window._poDetailMinimized = !window._poDetailMinimized; poRenderDetail(); }
+function poDetailClose(){ window._poSelectedId=null; window._poDetailMinimized=false; poqRenderCards(); poRenderDetail(); }
 async function poHeaderFieldSave(id,field,value){
   const {error}=await db.from("purchase_orders").update({[field]:value||null}).eq("id",id);
   const m=$("poDetailMsg");
