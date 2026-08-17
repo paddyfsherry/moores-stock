@@ -124,6 +124,7 @@
   <button data-sub="onhand" class="active" onclick="showStockSub('onhand')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">On hand</button>
   <button data-sub="move" onclick="showStockSub('move')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Movements</button>
   <button data-sub="recon" onclick="showStockSub('recon')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Reconcile</button>
+  <button data-sub="ponew" onclick="showStockSub('ponew')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">New PO</button>
   <button data-sub="po" onclick="showStockSub('po')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Purchase orders</button>
 </div>
 <style>#stockSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
@@ -361,13 +362,13 @@
     </div>
   </div>
 
-  <!-- ========== PURCHASE ORDERS ========== -->
-  <div id="viewPO" class="view" style="display:none">
+  <!-- ========== NEW PURCHASE ORDER ========== -->
+  <div id="viewPONew" class="view" style="display:none">
     <div class="panel">
       <h2>New purchase order</h2>
       <p class="hint">Wine on order: what&rsquo;s coming, from whom, at what cost. Receiving against the order posts real stock movements &mdash; the outstanding balance is what&rsquo;s still afloat.</p>
       <div class="grid3">
-        <div><label for="poSup">Supplier</label><select id="poSup"></select></div>
+        <div><label for="poSup">Supplier</label><div class="picker"><input id="poSup" placeholder="type to find supplier&hellip;" autocomplete="off"><ul style="display:none"></ul></div></div>
         <div><label for="poDate">Order date</label><input id="poDate" type="date"></div>
         <div><label for="poRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poRef" placeholder="supplier order / proforma no."></div>
       </div>
@@ -393,6 +394,10 @@
       <button class="btn" id="poSave">Save purchase order</button>
       <div class="msg" id="poMsg"></div>
     </div>
+  </div>
+
+  <!-- ========== PURCHASE ORDER LIST ========== -->
+  <div id="viewPO" class="view" style="display:none">
     <div class="panel">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2>Purchase orders</h2>
@@ -449,7 +454,7 @@
       </div>
       <p class="hint" style="margin:.2rem 0 .8rem">Claude reads the invoice and matches lines against this supplier's open purchase orders. Nothing posts to stock until you agree it below.</p>
       <div class="grid2">
-        <div><label for="siSup">Supplier</label><select id="siSup"></select></div>
+        <div><label for="siSup">Supplier</label><div class="picker"><input id="siSup" placeholder="type to find supplier&hellip;" autocomplete="off"><ul style="display:none"></ul></div></div>
         <div><label for="siFile">Invoice PDF</label><input id="siFile" type="file" accept="application/pdf" disabled></div>
       </div>
       <div class="msg" id="siMsg"></div>
@@ -459,8 +464,12 @@
           <div><label for="siLoc">Into location</label><select id="siLoc"></select></div>
           <div><label for="siInvNo">Invoice number</label><input id="siInvNo"></div>
         </div>
-        <div class="wrap"><table><thead><tr><th>Wine</th><th class="num">Cases</th><th class="num">Cost</th><th>Match</th><th></th></tr></thead>
-        <tbody id="siBody"></tbody></table></div>
+        <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:1fr 1fr;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600;padding:.5rem .75rem;border-bottom:1px solid var(--line)">
+            <div>Supplier's description</div><div style="padding-left:1rem;border-left:1px solid var(--line)">Matched to</div>
+          </div>
+          <div id="siBody"></div>
+        </div>
         <button class="btn" id="siPostBtn" onclick="siPost()" style="margin-top:.8rem">Agree and post receipt</button>
         <p class="hint" id="siPostHint" style="margin-top:.3rem"></p>
       </div>
@@ -824,7 +833,7 @@ async function loadRefData(){
 document.querySelectorAll("#mainNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 function switchView(v){
   document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports","viewSalesOrders","viewPO"].forEach(x=>$(x).style.display="none");
+  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports","viewSalesOrders","viewPO","viewPONew"].forEach(x=>$(x).style.display="none");
   $("stockSub").style.display = v==="stock" ? "flex":"none";
   $("salesSub").style.display = v==="newinv" ? "flex":"none";
   if(v==="cockpit"){ $("viewCockpit").style.display="block"; loadCockpit(); }
@@ -841,9 +850,11 @@ function showStockSub(s){
   $("viewHistory").style.display = s==="move"?"block":"none";
   $("viewRecon").style.display = s==="recon"?"block":"none";
   $("viewPO").style.display = s==="po"?"block":"none";
+  $("viewPONew").style.display = s==="ponew"?"block":"none";
   if(s==="onhand") loadStock();
   if(s==="move") loadHistory();
-  if(s==="po") poInit();
+  if(s==="po") renderPos();
+  if(s==="ponew") poInit();
 }
 
 /* ==================== STOCK VIEW ==================== */
@@ -1126,17 +1137,20 @@ function wirePkPickers(){
 }
 
 /* ==================== NEW PRODUCT ==================== */
-let npSuppliers=null;
-async function openNp(){
+let npSuppliers=null, npOnCreated=null;
+async function openNp(prefillName, onCreated){
   if(!npSuppliers){
     npSuppliers = await fetchAll("suppliers","id,name","name");
     $("npSupList").innerHTML = npSuppliers.map(s=>`<option value="${esc(s.name)}">`).join("");
     $("npDuty").innerHTML = Object.values(dutyCats).map(d=>`<option value="${d.id}">${esc(d.name)} (€${eur(d.duty_per_case)})</option>`).join("");
   }
+  npOnCreated = onCreated||null;
+  $("npName").value = prefillName||"";
+  $("npSave").textContent = onCreated ? "Save and use on this line" : "Create product";
   $("npWrap").style.display="block";
   if(!$("pkLines").children.length){ $("pkLines").insertAdjacentHTML("beforeend", pkLineHtml(1)); wirePkPickers(); }
 }
-function closeNp(){ $("npWrap").style.display="none"; }
+function closeNp(){ $("npWrap").style.display="none"; npOnCreated=null; $("npSave").textContent="Create product"; }
 $("npIsPack").onchange = ()=>{ $("npPackWrap").style.display = $("npIsPack").checked?"block":"none"; };
 $("pkAddLine").onclick = ()=>{ $("pkLines").insertAdjacentHTML("beforeend", pkLineHtml(Date.now())); wirePkPickers(); };
 $("npSave").onclick = async ()=>{
@@ -1166,6 +1180,15 @@ $("npSave").onclick = async ()=>{
   }
   products.push(prod); products.sort((a,b)=>a.name.localeCompare(b.name));
   $("npSave").disabled=false;
+  if(npOnCreated){
+    const cb=npOnCreated;
+    $("npName").value=""; $("npCost").value=0; $("npPrice").value=0; $("pkLines").innerHTML="";
+    $("npIsPack").checked=false; $("npPackWrap").style.display="none";
+    renderProducts();
+    closeNp();
+    cb(prod);
+    return;
+  }
   m.textContent=(isPack?"Gift set":"Product")+" created — code "+prod.id+". It is now in the wine list and every picker.";
   m.className="msg ok";
   $("npName").value=""; $("npCost").value=0; $("npPrice").value=0; $("pkLines").innerHTML="";
@@ -2173,20 +2196,78 @@ async function soInvSave(){
   soInvClose(); renderSos(); openInvoice(nid);
 }
 
+/* ==================== GENERIC TYPE-AHEAD PICKER ==================== */
+/* Wires an <input> + adjacent <ul> as a keyboard-navigable combobox.
+   opts: {minChars, getHits(q)->array, renderLi(item)->html, onPick(item),
+          onDirty() (optional, fired on every keystroke before filtering),
+          addNewLabel(q)->html, onAddNew(q) (both optional \u2014 enables an add-new row)} */
+function wirePicker(inp, ul, opts){
+  let items=[], hl=-1;
+  const close=()=>{ ul.style.display="none"; hl=-1; };
+  const paint=()=>{
+    [...ul.children].forEach((li,idx)=>li.classList.toggle("hl", idx===hl));
+    if(hl>=0) ul.children[hl].scrollIntoView({block:"nearest"});
+  };
+  const draw=(q)=>{
+    items = opts.getHits(q);
+    let html = items.map((it,idx)=>`<li data-idx="${idx}">${opts.renderLi(it)}</li>`).join("");
+    if(!items.length) html = "<li class='dim'>No match</li>";
+    if(opts.onAddNew) html += `<li data-addnew="1" style="border-top:1px solid var(--line);color:var(--claret);font-weight:600">${opts.addNewLabel(q)}</li>`;
+    ul.innerHTML = html; hl=-1; ul.style.display="block";
+    ul.querySelectorAll("li[data-idx]").forEach(li=>li.onclick=()=>{ opts.onPick(items[+li.dataset.idx]); close(); });
+    if(opts.onAddNew){ const an=ul.querySelector("li[data-addnew]"); if(an) an.onclick=()=>{ opts.onAddNew(inp.value.trim()); close(); }; }
+  };
+  inp.oninput=()=>{
+    if(opts.onDirty) opts.onDirty();
+    const q=inp.value.trim();
+    if(q.length<opts.minChars){ close(); return; }
+    draw(q);
+  };
+  inp.onkeydown=(e)=>{
+    if(ul.style.display==="none") return;
+    const rows=[...ul.children];
+    if(e.key==="ArrowDown"){ e.preventDefault(); hl=Math.min(hl+1, rows.length-1); paint(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); hl=Math.max(hl-1,0); paint(); }
+    else if(e.key==="Enter"){ if(hl>=0 && rows[hl]){ e.preventDefault(); rows[hl].click(); } }
+    else if(e.key==="Escape"){ close(); }
+  };
+  inp.onblur=()=>setTimeout(close,150);
+  return {close};
+}
+function wireSupplierPicker(inp, ul, onPick){
+  inp.dataset.sid="";
+  wirePicker(inp, ul, {
+    minChars:1,
+    getHits:q=>(window._supAll||[]).filter(s=>s.name.toLowerCase().includes(q.toLowerCase())).slice(0,12),
+    renderLi:s=>esc(s.name),
+    onDirty:()=>{ inp.dataset.sid=""; },
+    onPick:s=>{ inp.value=s.name; inp.dataset.sid=s.id; onPick(s); }
+  });
+}
+function wireWinePicker(inp, ul, onPick){
+  wirePicker(inp, ul, {
+    minChars:2,
+    getHits:q=>products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q.toLowerCase())||String(p.id).includes(q))).slice(0,10),
+    renderLi:p=>`${p.id} \u2014 ${esc(p.name)} <span class="cs">(${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml)</span>`,
+    onDirty:()=>{ inp.dataset.pid=""; },
+    onPick,
+    addNewLabel:q=>`+ Add new product \u201c${esc(q)}\u201d`,
+    onAddNew:(q)=>openNp(q, onPick)
+  });
+}
+
 /* ==================== PURCHASE ORDERS ==================== */
 let poInited=false;
 async function poInit(){
   await ensureSuppliers();
-  if(poInited){ renderPos(); return; }
+  if(poInited){ return; }
   poInited=true;
   $("poDate").value=new Date().toISOString().slice(0,10);
-  $("poSup").innerHTML='<option value="">\u2014 pick a supplier \u2014</option>'+
-    (window._supAll||[]).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  wireSupplierPicker($("poSup"), $("poSup").nextElementSibling, ()=>{});
   $("poAddLine").onclick=()=>addPoLine();
-  for(let k=0;k<10;k++) addPoLine();
+  for(let k=0;k<5;k++) addPoLine();
   $("poSave").onclick=savePo;
   $("poShowDone").onchange=renderPos;
-  renderPos();
 }
 function addPoLine(){
   const i=Date.now()+Math.random();
@@ -2202,22 +2283,13 @@ function addPoLine(){
   </div>`);
   const div=$("poLines").lastElementChild;
   const inp=div.querySelector(".poProd"), ul=inp.nextElementSibling;
-  inp.oninput=()=>{
-    inp.dataset.pid="";
-    const q=inp.value.trim().toLowerCase();
-    if(q.length<2){ul.style.display="none";return;}
-    const hits=products.filter(p=>!p.obsolete&&(p.name.toLowerCase().includes(q)||String(p.id).includes(q))).slice(0,10);
-    ul.innerHTML=hits.map(p=>`<li data-id="${p.id}">${p.id} \u2014 ${esc(p.name)} <span class="cs">(${p.bottles_in_case}\u00D7${p.bottle_size_ml}ml)</span></li>`).join("")||"<li class='dim'>No match</li>";
-    ul.style.display="block";
-    ul.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>{
-      const p=products.find(x=>x.id==li.dataset.id);
-      inp.value=p.name; inp.title=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id; ul.style.display="none";
-      div.querySelector(".poCap").textContent = p.id+" \u00B7 "+p.bottles_in_case+"\u00D7"+p.bottle_size_ml+"ml \u00B7 catalogue cost \u20AC"+eur(p.case_cost);
-      if(!+div.querySelector(".poCases").value) div.querySelector(".poCases").value=1;
-      if(!+div.querySelector(".poCost").value && Number(p.case_cost)>0) div.querySelector(".poCost").value=Number(p.case_cost).toFixed(2);
-      poLineTotal(div);
-    });
-  };
+  wireWinePicker(inp, ul, (p)=>{
+    inp.value=p.name; inp.title=p.id+" \u2014 "+p.name; inp.dataset.pid=p.id;
+    div.querySelector(".poCap").textContent = p.id+" \u00B7 "+p.bottles_in_case+"\u00D7"+p.bottle_size_ml+"ml \u00B7 catalogue cost \u20AC"+eur(p.case_cost);
+    if(!+div.querySelector(".poCases").value) div.querySelector(".poCases").value=1;
+    if(!+div.querySelector(".poCost").value && Number(p.case_cost)>0) div.querySelector(".poCost").value=Number(p.case_cost).toFixed(2);
+    poLineTotal(div);
+  });
   div.querySelector(".poCases").oninput=()=>poLineTotal(div);
   div.querySelector(".poCost").oninput=()=>poLineTotal(div);
 }
@@ -2235,7 +2307,7 @@ function poTotals(){
 async function savePo(){
   const m=$("poMsg"); m.className="msg";
   const fail=t=>{m.textContent=t;m.className="msg err";};
-  const supId=+$("poSup").value||null;
+  const supId=+$("poSup").dataset.sid||null;
   if(!supId) return fail("Pick the supplier.");
   const lines=[...document.querySelectorAll("#poLines [data-po]")].map(div=>({
     pid:+div.querySelector(".poProd").dataset.pid||null,
@@ -2257,10 +2329,11 @@ async function savePo(){
   $("poSave").disabled=false;
   if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
   m.textContent="Purchase order PO-"+po.id+" saved."; m.className="msg ok";
-  $("poLines").innerHTML=""; for(let k=0;k<10;k++) addPoLine();
+  $("poLines").innerHTML=""; for(let k=0;k<5;k++) addPoLine();
+  $("poSup").value=""; $("poSup").dataset.sid="";
   $("poRef").value=""; $("poComment").value=""; $("poExpected").value="";
   $("poTransit").checked=false; poTotals();
-  renderPos();
+  setTimeout(()=>showStockSub("po"),900);
 }
 function poBic(pid){ const p=products.find(x=>x.id===pid); return p?p.bottles_in_case:12; }
 function poLineOut(l){ return Math.max(0, Number(l.cases)-Number(l.bottles_received||0)/poBic(l.product_id)); }
@@ -2454,18 +2527,23 @@ async function siOpen(){
   $("siLoc").innerHTML=(locations||[]).map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join("");
   const {data:open}=await db.from("purchase_orders").select("supplier_id").in("status",["open","part_received"]);
   const supIds=[...new Set((open||[]).map(o=>o.supplier_id).filter(Boolean))];
-  const sups=(window._supAll||[]).filter(s=>supIds.includes(s.id));
-  $("siSup").innerHTML='<option value="">\u2014 pick the supplier \u2014</option>'+
-    sups.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
-  $("siSup").onchange=siLoadPO;
+  window._siSupOptions=(window._supAll||[]).filter(s=>supIds.includes(s.id));
+  const inp=$("siSup"), ul=inp.nextElementSibling;
+  inp.value=""; inp.dataset.sid="";
+  wirePicker(inp, ul, {
+    minChars:1,
+    getHits:q=>window._siSupOptions.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())).slice(0,12),
+    renderLi:s=>esc(s.name),
+    onDirty:()=>{ inp.dataset.sid=""; $("siFile").disabled=true; $("siResults").style.display="none"; },
+    onPick:s=>{ inp.value=s.name; inp.dataset.sid=s.id; siLoadPO(s.id); }
+  });
   $("siFile").value=""; $("siFile").disabled=true;
   $("siResults").style.display="none";
   const m=$("siMsg"); m.textContent=""; m.className="msg";
   $("siWrap").style.display="block";
 }
 function siClose(){ $("siWrap").style.display="none"; }
-async function siLoadPO(){
-  const supId=+$("siSup").value||null;
+async function siLoadPO(supId){
   $("siFile").disabled=!supId; $("siFile").value=""; $("siResults").style.display="none";
   if(!supId) return;
   const {data:pos}=await db.from("purchase_orders")
@@ -2473,14 +2551,14 @@ async function siLoadPO(){
     .eq("supplier_id",supId).in("status",["open","part_received"]).order("id");
   siOpenLines=[];
   (pos||[]).forEach(po=>(po.purchase_order_lines||[]).forEach(l=>{
-    if(poLineOut(l)>0) siOpenLines.push({po_id:po.id, line:l});
+    if(poLineOut(l)>0) siOpenLines.push({po_id:po.id, exp:l.expected_date||po.expected_date, line:l});
   }));
   $("siMsg").textContent = siOpenLines.length ? "" : "No open PO lines for this supplier \u2014 upload anyway if you expect a new one.";
   $("siMsg").className="msg";
 }
 $("siFile").onchange = async ()=>{
   const f=$("siFile").files[0]; if(!f) return;
-  const supId=+$("siSup").value; const sup=(window._supAll||[]).find(s=>s.id===supId);
+  const supId=+$("siSup").dataset.sid; const sup=(window._supAll||[]).find(s=>s.id===supId);
   const m=$("siMsg"); m.className="msg ok"; m.textContent="Reading the invoice\u2026";
   let rawLines=[];
   try{ rawLines = await pdfToLines(f); }
@@ -2507,8 +2585,11 @@ $("siFile").onchange = async ()=>{
     } else if(conf==="low"){
       status = "possible";
     } else {
-      openLine = siOpenLines.find(o=>o.line.product_id===pl.matchedProductId);
-      if(openLine){
+      const cands = siOpenLines.filter(o=>o.line.product_id===pl.matchedProductId);
+      if(cands.length>1){
+        status = "choose_po"; openLine=null;
+      } else if(cands.length===1){
+        openLine=cands[0];
         const out=poLineOut(openLine.line);
         status = (Math.abs(out-Number(pl.cases))<0.01) ? "matched" : "qtydiff";
       } else {
@@ -2524,39 +2605,62 @@ $("siFile").onchange = async ()=>{
 };
 function siProdName(id){ const p=products.find(x=>x.id===id); return p?p.name:("#"+id); }
 function siRender(){
-  const supId=+$("siSup").value;
+  const supId=+$("siSup").dataset.sid;
   const supProducts = products.filter(p=>p.supplier_id===supId && !p.obsolete);
   $("siBody").innerHTML = siLines.map((l,i)=>{
-    let badge, action;
+    const left = `<div style="font-size:.9rem">${esc(l.description||"")}</div>
+      <div style="font-size:.78rem;color:#9A8F84;margin-top:2px">${l.cases} case${l.cases===1?"":"s"} \u00B7 \u20ac${Number(l.caseCost||0).toFixed(2)}/case</div>`;
+    let matchedName = l.candidateId ? "#"+l.candidateId+" "+esc(siProdName(l.candidateId)) : "";
+    let right;
     if(l.status==="matched"){
-      badge = "<span style='background:#e1f5ee;color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Matched</span>";
-      action = "";
+      right = `<div style="font-size:.9rem">${matchedName}</div>
+        <span style="display:inline-block;margin-top:6px;background:#e1f5ee;color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">Matched</span>`;
     } else if(l.status==="qtydiff"){
-      badge = "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Qty differs from PO"+(l.po_line?" ("+poLineOut(l.po_line.line)+" outstanding)":"")+"</span>";
-      action = "";
+      const out = l.po_line ? " \u2014 "+poLineOut(l.po_line.line)+" outstanding" : "";
+      right = `<div style="font-size:.9rem">${matchedName}</div>
+        <span style="display:inline-block;margin-top:6px;background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">Qty differs${out}</span>`;
+    } else if(l.status==="choose_po"){
+      const cands = siOpenLines.filter(o=>o.line.product_id===l.candidateId);
+      right = `<div style="font-size:.9rem">${matchedName}</div>
+        <div style="font-size:.78rem;color:#9A8F84;margin:4px 0 6px">On more than one open PO \u2014 which is this for?</div>
+        <div>${cands.map((c,ci)=>`<label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;padding:.15rem 0;cursor:pointer">
+          <input type="radio" name="sipo${i}" onclick="siChoosePO(${i},${c.po_id})"> PO-${c.po_id} \u2014 ${poLineOut(c.line)} outstanding${c.exp?" \u00B7 exp "+c.exp:""}</label>`).join("")}</div>`;
     } else if(l.status==="possible"){
-      badge = "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Possible match: "+esc(siProdName(l.candidateId))+"</span>";
-      action = `<button onclick="siConfirm(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;margin-right:.3rem">Confirm</button>
-        <button onclick="siReject(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem">Not this</button>`;
+      right = `<div style="font-size:.9rem">Possible match: ${matchedName}</div>
+        <span style="display:inline-block;margin-top:6px;background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">Needs confirming</span>
+        <div style="margin-top:6px">
+          <button onclick="siConfirm(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;margin-right:.3rem">Confirm</button>
+          <button onclick="siReject(${i})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem">Not this</button>
+        </div>`;
     } else {
-      badge = "<span style='background:#fcebeb;color:#a32d2d;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>No product match</span>";
       const opts = '<option value="">\u2014 pick the wine \u2014</option>'+supProducts.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
-      action = `<select onchange="siManualPick(${i},this.value)" style="font-size:.8rem;padding:.2rem">${opts}</select>`;
+      right = `<span style="display:inline-block;background:#fcebeb;color:#a32d2d;border-radius:99px;padding:.15rem .6rem;font-size:.78rem">No product match</span>
+        <select onchange="siManualPick(${i},this.value)" style="display:block;margin-top:6px;font-size:.8rem;padding:.2rem;width:100%">${opts}</select>`;
     }
-    return `<tr><td>${esc(l.description||"")}</td>
-      <td class="num">${l.cases}</td><td class="num">\u20ac${Number(l.caseCost||0).toFixed(2)}</td><td>${badge}</td><td>${action}</td></tr>`;
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;padding:.6rem .75rem;border-top:1px solid var(--line)">
+      <div>${left}</div><div style="padding-left:1rem;border-left:1px solid var(--line)">${right}</div></div>`;
   }).join("");
   const postable = siLines.filter(l=>l.status==="matched"||l.status==="qtydiff").length;
   $("siPostHint").textContent = postable<siLines.length
     ? (siLines.length-postable)+" line"+(siLines.length-postable===1?"":"s")+" won't post until confirmed and matched to a PO."
     : "";
 }
+function siChoosePO(i,poId){
+  const l=siLines[i];
+  const cand = siOpenLines.find(o=>o.line.product_id===l.candidateId && o.po_id===poId);
+  if(!cand) return;
+  const out=poLineOut(cand.line);
+  siLines[i].po_line=cand; siLines[i].matchedProductId=l.candidateId;
+  siLines[i].status=(Math.abs(out-Number(l.cases))<0.01)?"matched":"qtydiff";
+  siRender();
+}
 async function siResolveToPO(i){
   const l=siLines[i];
-  const supId=+$("siSup").value;
-  const openLine = siOpenLines.find(o=>o.line.product_id===l.candidateId);
-  if(openLine){
-    const out=poLineOut(openLine.line);
+  const supId=+$("siSup").dataset.sid;
+  const cands = siOpenLines.filter(o=>o.line.product_id===l.candidateId);
+  if(cands.length>1){ siLines[i].status="choose_po"; siRender(); return; }
+  if(cands.length===1){
+    const openLine=cands[0], out=poLineOut(openLine.line);
     siLines[i].po_line=openLine; siLines[i].matchedProductId=l.candidateId;
     siLines[i].status=(Math.abs(out-Number(l.cases))<0.01)?"matched":"qtydiff";
     siRender(); return;
@@ -2589,7 +2693,7 @@ async function siPost(){
   const toPost = siLines.filter(l=>l.status==="matched"||l.status==="qtydiff");
   if(!toPost.length) return fail("Nothing matched to a PO yet \u2014 match or add lines first.");
   $("siPostBtn").disabled=true;
-  const supId=+$("siSup").value;
+  const supId=+$("siSup").dataset.sid;
   const siFileObj=$("siFile").files[0];
   let storagePath=null;
   if(siFileObj){
