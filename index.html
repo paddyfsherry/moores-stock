@@ -447,7 +447,7 @@
 
   <!-- ========== RECEIVE DELIVERY MODAL ========== -->
   <div id="rdWrap" style="display:none;position:fixed;inset:0;background:rgba(43,35,32,.55);z-index:70" onclick="if(event.target===this)rdClose()">
-    <div style="background:var(--paper);max-width:720px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
+    <div style="background:var(--paper);max-width:920px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2 class="serif" style="font-size:1.15rem">Receive a delivery</h2>
         <button onclick="rdClose()" style="margin-left:auto;background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
@@ -2888,7 +2888,6 @@ async function siResolveToPO(i){
     po_id:poId, product_id:l.candidateId, description:l.description, cases:l.cases, case_cost:l.caseCost||0, bottles_received:0
   }).select().single();
   if(error){ alert("Couldn't add line: "+error.message); siLines[i].confirmed=false; siRender(); return; }
-  await db.from("purchase_orders").update({status:"part_received"}).eq("id",poId).eq("status","open");
   siOpenLines.push({po_id:poId, line:newLine});
   siLines[i].matchedProductId=l.candidateId; siLines[i].status="matched"; siLines[i].po_line={po_id:poId, line:newLine};
   siRender();
