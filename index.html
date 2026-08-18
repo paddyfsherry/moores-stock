@@ -9,39 +9,117 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-  :root{
-    --claret:#5C1A2E;        /* deep claret — masthead & primary actions */
+  :root,[data-theme="colour"]{
+    --claret:#5C1A2E;        /* primary accent */
     --claret-dark:#43121F;
-    --paper:#FAF7F2;         /* warm paper background */
-    --ink:#2B2320;           /* near-black warm ink */
+    --on-claret:#F6EDE4;     /* text/icons sitting on the accent colour */
+    --paper:#FAF7F2;         /* app background */
+    --ink:#2B2320;           /* primary text */
     --line:#E4DCD2;          /* hairline rules */
-    --bond:#8A6D1F;          /* under-bond amber (wax seal) */
+    --bond:#8A6D1F;          /* under-bond amber */
     --bond-bg:#F5EDD8;
     --dp:#2F5D3A;            /* duty-paid green */
     --dp-bg:#E4EFE4;
     --neg:#A03030;
-    --muted:#7A6E63;
+    --neg-bg:#F7E3E3;
+    --warn:#8A5A00;          /* part-received / partial-paid amber, AA-fixed */
+    --warn-bg:#FBEFDA;
+    --muted:#5B5147;         /* darkened from the original muted grey to clear WCAG AA on paper */
     --card:#FFFFFF;
+    --sidebar-bg:#43121F;
+    --sidebar-text:#F6EDE4;
+    --sidebar-text-dim:#D9B9C2;
+    --sidebar-active-bg:#5C1A2E;
+    --sidebar-active-text:#FFFFFF;
+  }
+  [data-theme="light"]{
+    --claret:#3D5A73;
+    --claret-dark:#2C4356;
+    --on-claret:#FFFFFF;
+    --paper:#F7F8FA;
+    --ink:#1F2328;
+    --line:#E2E5E9;
+    --bond:#8A6D1F;
+    --bond-bg:#F3EEE0;
+    --dp:#2F6B45;
+    --dp-bg:#E3F0E7;
+    --neg:#B3261E;
+    --neg-bg:#FBE9E7;
+    --warn:#8A5A00;
+    --warn-bg:#FBEFDA;
+    --muted:#5F6672;
+    --card:#FFFFFF;
+    --sidebar-bg:#1F2937;
+    --sidebar-text:#F3F4F6;
+    --sidebar-text-dim:#9CA3AF;
+    --sidebar-active-bg:#3D5A73;
+    --sidebar-active-text:#FFFFFF;
+  }
+  [data-theme="dark"]{
+    --claret:#C97B92;
+    --claret-dark:#B15E77;
+    --on-claret:#1B1210;
+    --paper:#1B1918;
+    --ink:#EDE7E1;
+    --line:#3A3532;
+    --bond:#D2A93F;
+    --bond-bg:#3A2F16;
+    --dp:#7FBF8F;
+    --dp-bg:#1E3324;
+    --neg:#E08585;
+    --neg-bg:#3A1E1E;
+    --warn:#E0B24D;
+    --warn-bg:#3A2F16;
+    --muted:#A69C93;
+    --card:#242120;
+    --sidebar-bg:#141312;
+    --sidebar-text:#EDE7E1;
+    --sidebar-text-dim:#8A8079;
+    --sidebar-active-bg:#3A2126;
+    --sidebar-active-text:#F6EDE4;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{font-size:16px}
   body{font-family:'Public Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
   h1,h2,.serif{font-family:'Libre Caslon Text',Georgia,serif}
 
-  /* ---------- Masthead ---------- */
-  header{background:var(--claret);color:#F6EDE4;padding:.9rem 1.2rem;display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap}
-  header h1{font-size:1.25rem;font-weight:700;letter-spacing:.02em}
-  header .sub{font-size:.8rem;opacity:.75;font-style:italic;font-family:'Libre Caslon Text',serif}
-  header .who{margin-left:auto;font-size:.8rem;opacity:.85;display:flex;gap:.8rem;align-items:center}
-  header button{background:none;border:1px solid rgba(246,237,228,.4);color:#F6EDE4;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.78rem}
-  header button:hover{background:rgba(246,237,228,.12)}
+  /* ---------- App shell (Concept E) ---------- */
+  #appShell{display:none;min-height:100vh}
+  #appShell.on{display:flex}
+  #sidebar{width:210px;flex:none;background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  #sidebar .brand{padding:1.1rem 1.1rem .9rem;border-bottom:1px solid rgba(255,255,255,.12)}
+  #sidebar .brand h1{font-size:1.05rem;color:var(--sidebar-text);letter-spacing:.02em}
+  #sidebar .brand .sub{font-size:.72rem;opacity:.7;font-style:italic;font-family:'Libre Caslon Text',serif;color:var(--sidebar-text-dim);display:block;margin-top:.15rem}
+  #sideNav{display:flex;flex-direction:column;gap:.15rem;padding:.8rem .7rem;flex:1}
+  #sideNav button{display:block;width:100%;text-align:left;background:none;border:none;border-radius:6px;padding:.6rem .8rem;font-size:.92rem;font-weight:600;color:var(--sidebar-text-dim);cursor:pointer}
+  #sideNav button:hover{background:rgba(255,255,255,.08);color:var(--sidebar-text)}
+  #sideNav button.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text)}
+  #sidebar .foot{padding:.9rem 1.1rem;font-size:.72rem;color:var(--sidebar-text-dim)}
+  #contentCol{flex:1;min-width:0;display:flex;flex-direction:column}
 
-  nav{background:var(--card);border-bottom:1px solid var(--line);display:flex;gap:.25rem;padding:0 .8rem;overflow-x:auto}
-  nav button{background:none;border:none;border-bottom:3px solid transparent;padding:.8rem 1rem;font-size:.92rem;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
-  nav button.active{color:var(--claret);border-bottom-color:var(--claret)}
-  nav button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--claret);outline-offset:2px}
+  #topbar{background:var(--card);border-bottom:1px solid var(--line);padding:.55rem 1.1rem;display:flex;align-items:center;gap:.8rem}
+  #topbar input[type=search]{max-width:340px;margin:0}
+  #topbar .who{margin-left:auto;font-size:.8rem;color:var(--muted);display:flex;gap:.6rem;align-items:center}
+  #topbar button.iconbtn{background:none;border:1px solid var(--line);color:var(--ink);padding:.35rem .6rem;border-radius:5px;cursor:pointer;font-size:.85rem}
+  #topbar button.iconbtn:hover{background:var(--paper)}
 
-  main{max-width:1100px;margin:0 auto;padding:1.2rem}
+  #crumbBar{background:var(--paper);padding:.6rem 1.1rem;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
+  #crumbBar .crumb{font-size:.8rem;color:var(--muted);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+  #crumbBar .subtabs{display:flex;gap:.4rem;flex-wrap:wrap}
+
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--claret);outline-offset:2px}
+  #sideNav button:focus-visible{outline-color:var(--sidebar-text)}
+
+  main{max-width:1100px;margin:0 auto;padding:1.2rem;width:100%}
+
+  @media(max-width:800px){
+    #appShell.on{flex-direction:column}
+    #sidebar{width:100%;height:auto;position:static;flex-direction:row;align-items:center;overflow-x:auto}
+    #sidebar .brand{border-bottom:none;border-right:1px solid rgba(255,255,255,.12);white-space:nowrap}
+    #sideNav{flex-direction:row;padding:.5rem}
+    #sideNav button{white-space:nowrap}
+    #sidebar .foot{display:none}
+  }
 
   /* ---------- Login ---------- */
   .login-wrap{max-width:380px;margin:8vh auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2rem}
@@ -51,7 +129,7 @@
   /* ---------- Forms ---------- */
   label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);margin:.7rem 0 .25rem;text-transform:uppercase;letter-spacing:.04em}
   input,select,textarea{width:100%;padding:.55rem .6rem;border:1px solid var(--line);border-radius:5px;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)}
-  .btn{display:inline-block;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.6rem 1.2rem;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:1rem}
+  .btn{display:inline-block;background:var(--claret);color:var(--on-claret);border:none;border-radius:5px;padding:.6rem 1.2rem;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:1rem}
   .btn:hover{background:var(--claret-dark)}
   .btn[disabled]{opacity:.5;cursor:default}
   .msg{margin-top:.8rem;font-size:.85rem;padding:.6rem .8rem;border-radius:5px;display:none}
@@ -107,48 +185,62 @@
 </head>
 <body>
 
-<header>
-  <h1>Moores&rsquo; Wines</h1>
-  <span class="sub">Stock Book</span>
-  <span class="who" id="whoBox" style="display:none"><span id="whoEmail"></span><button id="btnLogout">Sign out</button></span>
-</header>
-
-<nav id="mainNav" style="display:none">
-  <button data-view="cockpit" class="active">Cockpit</button>
-  <button data-view="newinv">Sales</button>
-  <button data-view="stock">Stock</button>
-  <button data-view="products">Catalogue</button>
-  <button data-view="reports">Reports</button>
-</nav>
-<div id="stockSub" style="display:none;background:var(--paper);padding:.5rem 1.2rem;gap:.4rem;border-bottom:1px solid var(--line)">
-  <button data-sub="onhand" class="active" onclick="showStockSub('onhand')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">On hand</button>
-  <button data-sub="move" onclick="showStockSub('move')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Movements</button>
-  <button data-sub="recon" onclick="showStockSub('recon')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Reconcile</button>
-  <button data-sub="ponew" onclick="showStockSub('ponew')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">New PO</button>
-  <button data-sub="po" onclick="showStockSub('po')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Purchase orders</button>
+<!-- ========== LOGIN (outside the app shell) ========== -->
+<div id="viewLogin" class="login-wrap view">
+  <h2>Sign in</h2>
+  <p>Use the email and password set up in Supabase.</p>
+  <label for="liEmail">Email</label>
+  <input id="liEmail" type="email" autocomplete="username">
+  <label for="liPass">Password</label>
+  <input id="liPass" type="password" autocomplete="current-password">
+  <button class="btn" id="btnLogin">Sign in</button>
+  <div class="msg" id="liMsg"></div>
 </div>
-<style>#stockSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
-<div id="salesSub" style="display:none;background:var(--paper);padding:.5rem 1.2rem;gap:.4rem;border-bottom:1px solid var(--line)">
-  <button data-ssub="so" onclick="showSalesSub('so')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Orders</button>
-  <button data-ssub="inv" class="active" onclick="showSalesSub('inv')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Invoices</button>
-  <button data-ssub="lists" onclick="showSalesSub('lists')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Wine lists</button>
-  <button data-ssub="dn" onclick="showSalesSub('dn')" style="border:1px solid var(--line);background:#fff;border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600">Delivery notes</button>
-</div>
-<style>#salesSub button.active{background:var(--claret);color:#F6EDE4;border-color:var(--claret)}</style>
 
-<main id="appMain">
-
-  <!-- ========== LOGIN ========== -->
-  <div id="viewLogin" class="login-wrap view">
-    <h2>Sign in</h2>
-    <p>Use the email and password set up in Supabase.</p>
-    <label for="liEmail">Email</label>
-    <input id="liEmail" type="email" autocomplete="username">
-    <label for="liPass">Password</label>
-    <input id="liPass" type="password" autocomplete="current-password">
-    <button class="btn" id="btnLogin">Sign in</button>
-    <div class="msg" id="liMsg"></div>
+<div id="appShell">
+  <div id="sidebar">
+    <div class="brand">
+      <h1 class="serif">Moores&rsquo; Wines</h1>
+      <span class="sub">Stock Book</span>
+    </div>
+    <nav id="sideNav">
+      <button data-view="cockpit" class="active">Cockpit</button>
+      <button data-view="newinv">Sales</button>
+      <button data-view="stock">Stock</button>
+      <button data-view="products">Catalogue</button>
+      <button data-view="reports">Reports</button>
+    </nav>
+    <div class="foot">Signed in</div>
   </div>
+
+  <div id="contentCol">
+    <div id="topbar">
+      <input type="search" id="globalSearch" placeholder="Jump to a wine, PO, invoice…">
+      <span class="who" id="whoBox" style="display:none">
+        <button class="iconbtn" id="btnSettings" title="Settings" aria-label="Settings">&#9881;</button>
+        <span id="whoEmail"></span>
+        <button class="iconbtn" id="btnLogout">Sign out</button>
+      </span>
+    </div>
+    <div id="crumbBar">
+      <span class="crumb" id="crumbText">Cockpit</span>
+      <div class="subtabs" id="stockSub" style="display:none">
+        <button data-sub="onhand" class="active" onclick="showStockSub('onhand')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">On hand</button>
+        <button data-sub="move" onclick="showStockSub('move')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Movements</button>
+        <button data-sub="recon" onclick="showStockSub('recon')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Reconcile</button>
+        <button data-sub="ponew" onclick="showStockSub('ponew')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">New PO</button>
+        <button data-sub="po" onclick="showStockSub('po')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Purchase orders</button>
+      </div>
+      <div class="subtabs" id="salesSub" style="display:none">
+        <button data-ssub="so" onclick="showSalesSub('so')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Orders</button>
+        <button data-ssub="inv" class="active" onclick="showSalesSub('inv')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Invoices</button>
+        <button data-ssub="lists" onclick="showSalesSub('lists')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Wine lists</button>
+        <button data-ssub="dn" onclick="showSalesSub('dn')" style="border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.3rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink)">Delivery notes</button>
+      </div>
+    </div>
+    <style>#stockSub button.active,#salesSub button.active{background:var(--claret);color:var(--on-claret);border-color:var(--claret)}</style>
+
+    <main id="appMain">
 
   <!-- ========== COCKPIT ========== -->
   <div id="viewCockpit" class="view" style="display:none">
@@ -270,11 +362,11 @@
       </div>
       <div class="chosen" id="soCustInfo"></div>
       <label>Lines <span style="text-transform:none;font-weight:400">(blank lines are ignored)</span></label>
-      <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600">
+      <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600">
         <div>Wine</div><div>Qty</div><div>Unit</div><div>Price &euro;</div><div>Note</div><div>Total &euro;</div><div></div>
       </div>
       <div id="soLines"></div>
-      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="soAddLine">+ add line</button>
+      <button class="btn" style="background:var(--muted);margin-top:.4rem" id="soAddLine">+ add line</button>
       <div class="grid2" style="margin-top:.6rem">
         <div><label for="soComment">Comment <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="soComment" placeholder="e.g. deliver w/c 24th, ring first"></div>
         <div style="text-align:right;align-self:end">
@@ -305,7 +397,7 @@
       <div class="chosen" id="niCustInfo"></div>
       <label>Lines</label>
       <div id="niLines"></div>
-      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="niAddLine">+ add line</button>
+      <button class="btn" style="background:var(--muted);margin-top:.4rem" id="niAddLine">+ add line</button>
       <div class="grid2" style="margin-top:.6rem">
         <div><label for="niComment">Delivery comment <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="niComment"></div>
         <div style="text-align:right;align-self:end">
@@ -356,7 +448,7 @@
         <label id="wlBiosLbl" style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="wlBios" style="width:auto"> include producer bios</label>
       </div>
       <button class="btn" id="wlRun">Preview &amp; print</button>
-      <button class="btn" id="wlSaveTpl" style="background:#7A6E63">Save as template</button>
+      <button class="btn" id="wlSaveTpl" style="background:var(--muted)">Save as template</button>
       <button class="btn" id="wlDelTpl" style="background:none;color:var(--neg);border:1px solid var(--line);display:none">Delete template</button>
       <div class="msg" id="wlMsg"></div>
     </div>
@@ -380,11 +472,11 @@
         <div></div>
       </div>
       <label>Lines <span style="text-transform:none;font-weight:400">(blank lines are ignored; note a line if it needs one &mdash; e.g. &ldquo;samples&rdquo; when there&rsquo;s no cost)</span></label>
-      <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600">
+      <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600">
         <div>Wine</div><div>Cases</div><div>Cost/case &euro;</div><div>Expected</div><div>Note</div><div>Total &euro;</div><div></div>
       </div>
       <div id="poLines"></div>
-      <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="poAddLine">+ add line</button>
+      <button class="btn" style="background:var(--muted);margin-top:.4rem" id="poAddLine">+ add line</button>
       <div class="grid2" style="margin-top:.6rem">
         <div><label for="poComment">Comment <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poComment"></div>
         <div style="text-align:right;align-self:end">
@@ -401,7 +493,7 @@
     <div class="panel">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2>Purchase orders</h2>
-        <button class="btn" style="margin-left:auto;background:#7A6E63" onclick="siOpen()">Upload supplier invoice</button>
+        <button class="btn" style="margin-left:auto;background:var(--muted)" onclick="siOpen()">Upload supplier invoice</button>
         <button class="btn" onclick="rdOpen()">Receive delivery</button>
       </div>
       <div style="display:grid;grid-template-columns:290px 1fr;gap:1.75rem;margin-top:.9rem;align-items:start">
@@ -487,7 +579,7 @@
           <div><label for="siInvNo">Invoice number</label><input id="siInvNo" onchange="siCheckDuplicate()"></div>
         </div>
         <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden">
-          <div style="display:grid;grid-template-columns:1fr 1fr;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#9A8F84;font-weight:600;padding:.5rem .75rem;border-bottom:1px solid var(--line)">
+          <div style="display:grid;grid-template-columns:1fr 1fr;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:.5rem .75rem;border-bottom:1px solid var(--line)">
             <div>Supplier's description</div><div style="padding-left:1rem;border-left:1px solid var(--line)">Wine on our side</div>
           </div>
           <div id="siBody"></div>
@@ -559,7 +651,7 @@
       <div id="npPackWrap" style="display:none;background:var(--bond-bg);border:1px solid var(--bond);border-radius:8px;padding:.7rem .9rem;margin-top:.5rem">
         <label>Components (bottles per one set)</label>
         <div id="pkLines"></div>
-        <button class="btn" style="background:#7A6E63;margin-top:.4rem" id="pkAddLine">+ add component</button>
+        <button class="btn" style="background:var(--muted);margin-top:.4rem" id="pkAddLine">+ add component</button>
       </div>
       <button class="btn" id="npSave">Create product</button>
       <div class="msg" id="npMsg"></div>
@@ -571,7 +663,7 @@
     <div style="background:var(--paper);max-width:900px;margin:4vh auto;max-height:92vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2 class="serif" id="drillTitle" style="font-size:1.15rem"></h2>
-        <button id="drillPrintBtn" style="margin-left:auto;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print wine report</button>
+        <button id="drillPrintBtn" style="margin-left:auto;background:var(--claret);color:var(--on-claret);border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print wine report</button>
         <button onclick="closeDrill()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
       </div>
       <p class="hint" id="drillSub" style="margin:.2rem 0 .8rem"></p>
@@ -622,7 +714,7 @@
           <div id="rpTypeChips" style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.35rem"></div></div>
       </div>
       <button class="btn" id="rpRun">Run report</button>
-      <button class="btn" id="rpCsv" style="background:#7A6E63;display:none">Download as spreadsheet</button>
+      <button class="btn" id="rpCsv" style="background:var(--muted);display:none">Download as spreadsheet</button>
       <div class="msg" id="rpMsg"></div>
     </div>
     <div id="rpChartWrap" class="panel" style="display:none"><h2 id="rpChartTitle" style="font-size:.95rem"></h2><div id="rpChart"></div></div>
@@ -684,8 +776,8 @@
     <div style="background:var(--paper);max-width:760px;margin:6vh auto;max-height:88vh;overflow-y:auto;border-radius:10px;padding:1.2rem 1.4rem">
       <div style="display:flex;align-items:baseline;gap:1rem">
         <h2 class="serif" id="invTitle" style="font-size:1.15rem"></h2>
-        <button onclick="dnFromInvoice()" style="margin-left:auto;background:#7A6E63;color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Delivery note</button>
-        <button onclick="printInvoice()" style="background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print</button>
+        <button onclick="dnFromInvoice()" style="margin-left:auto;background:var(--muted);color:var(--on-claret);border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Delivery note</button>
+        <button onclick="printInvoice()" style="background:var(--claret);color:var(--on-claret);border:none;border-radius:5px;padding:.3rem .9rem;cursor:pointer">Print</button>
         <button onclick="closeInv()" style="background:none;border:1px solid var(--line);border-radius:5px;padding:.3rem .8rem;cursor:pointer">Close</button>
       </div>
       <p class="hint" id="invMeta" style="margin:.2rem 0 .8rem"></p>
@@ -728,7 +820,7 @@
         <input type="checkbox" id="prodShowOld" style="width:auto"> show obsolete
       </label>
       <span class="count" id="prodCount"></span>
-      <button class="btn" style="margin:0 0 0 .5rem;background:#7A6E63" onclick="openSup()">Suppliers &amp; bios</button>
+      <button class="btn" style="margin:0 0 0 .5rem;background:var(--muted)" onclick="openSup()">Suppliers &amp; bios</button>
       <button class="btn" style="margin:0" onclick="openNp()">＋ New product</button>
     </div>
     <div class="wrap"><table>
@@ -754,8 +846,24 @@
     </div>
   </div>
 
-</main>
-<footer>Bottled &amp; balanced — Moores&rsquo; Wines stock system</footer>
+    </main>
+    <footer>Bottled &amp; balanced — Moores&rsquo; Wines stock system</footer>
+  </div>
+</div>
+
+<!-- ========== SETTINGS MODAL ========== -->
+<div id="settingsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:8px;padding:1.3rem 1.4rem;max-width:360px;width:92%">
+    <h2 style="font-size:1.05rem;margin-bottom:.9rem">Settings</h2>
+    <label style="margin-top:0">Theme</label>
+    <div style="display:flex;gap:.5rem;margin-top:.3rem">
+      <button class="themeOpt" data-theme="colour" style="flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:.5rem;cursor:pointer;font-size:.85rem;font-weight:600">Colour</button>
+      <button class="themeOpt" data-theme="light" style="flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:.5rem;cursor:pointer;font-size:.85rem;font-weight:600">Light</button>
+      <button class="themeOpt" data-theme="dark" style="flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:.5rem;cursor:pointer;font-size:.85rem;font-weight:600">Dark</button>
+    </div>
+    <button class="btn" id="btnCloseSettings" style="width:100%;text-align:center">Close</button>
+  </div>
+</div>
 
 <script>
 const SUPABASE_URL = "https://fnjmyixiztewkuygqpvy.supabase.co";
@@ -790,17 +898,16 @@ async function init(){
 }
 function showLogin(){
   $("viewLogin").style.display="block";
-  $("mainNav").style.display="none";
+  $("appShell").classList.remove("on");
   $("whoBox").style.display="none";
-  ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports"].forEach(v=>$(v).style.display="none");
-  $("stockSub").style.display="none";
-  $("salesSub").style.display="none";
 }
 async function enter(session){
   $("viewLogin").style.display="none";
-  $("mainNav").style.display="flex";
+  $("appShell").classList.add("on");
   $("whoBox").style.display="flex";
   $("whoEmail").textContent = session.user.email;
+  window._uid = session.user.id;
+  applyTheme(loadThemePref());
   await loadRefData();
   switchView("cockpit");
 }
@@ -814,6 +921,23 @@ $("btnLogin").onclick = async ()=>{
 };
 $("liPass").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnLogin").click()});
 $("btnLogout").onclick = async ()=>{ await db.auth.signOut(); location.reload(); };
+
+/* ==================== THEME ==================== */
+function themeKey(){ return "moores_theme_"+(window._uid||"anon"); }
+function loadThemePref(){ return localStorage.getItem(themeKey()) || "colour"; }
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem(themeKey(), t);
+  document.querySelectorAll(".themeOpt").forEach(b=>{
+    const on = b.dataset.theme===t;
+    b.style.borderColor = on ? "var(--claret)" : "var(--line)";
+    b.style.background = on ? "var(--claret)" : "var(--card)";
+    b.style.color = on ? "var(--on-claret)" : "var(--ink)";
+  });
+}
+$("btnSettings").onclick = ()=>{ $("settingsModal").style.display="flex"; applyTheme(document.documentElement.getAttribute("data-theme")||"colour"); };
+$("btnCloseSettings").onclick = ()=> $("settingsModal").style.display="none";
+document.querySelectorAll(".themeOpt").forEach(b=>b.onclick=()=>applyTheme(b.dataset.theme));
 
 /* ==================== REFERENCE DATA ==================== */
 async function loadRefData(){
@@ -837,9 +961,11 @@ async function loadRefData(){
 }
 
 /* ==================== NAV ==================== */
-document.querySelectorAll("#mainNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+const crumbLabels = {cockpit:"Cockpit", newinv:"Sales", stock:"Stock", products:"Catalogue", reports:"Reports"};
+document.querySelectorAll("#sideNav button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 function switchView(v){
-  document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  document.querySelectorAll("#sideNav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  $("crumbText").textContent = crumbLabels[v]||v;
   ["viewCockpit","viewStock","viewMove","viewNewInv","viewWineLists","viewDelNotes","viewHistory","viewProducts","viewRecon","viewReports","viewSalesOrders","viewPO","viewPONew"].forEach(x=>$(x).style.display="none");
   $("stockSub").style.display = v==="stock" ? "flex":"none";
   $("salesSub").style.display = v==="newinv" ? "flex":"none";
@@ -1260,7 +1386,7 @@ function printInvoice(){
     .tot strong{font-size:13pt}
     .foot{margin-top:3em;font-size:8pt;color:#999;font-style:italic;border-top:1px solid #e5ddd2;padding-top:.6em}
   </style></head><body>
-  ${inv.status==="draft"?"<div style='border:2px dashed #A03030;color:#A03030;text-align:center;font-size:13pt;letter-spacing:.25em;padding:.3em;margin-bottom:1em'>DRAFT — NOT ISSUED</div>":""}
+  ${inv.status==="draft"?"<div style='border:2px dashed var(--neg);color:var(--neg);text-align:center;font-size:13pt;letter-spacing:.25em;padding:.3em;margin-bottom:1em'>DRAFT — NOT ISSUED</div>":""}
   <div class="head"><h1>Moores&rsquo; Wines</h1>
     <div class="co">98 Lower Baggot Street<br>Dublin 2</div></div>
   <div class="meta">
@@ -1819,7 +1945,7 @@ function renderSup(){
       <div style="display:flex;align-items:baseline;gap:.8rem">
         <strong class="serif">${esc(s.name)}</strong>
         <span class="dim" style="font-size:.75rem">${s.bio?"":"no bio yet"}</span>
-        <button class="supSave" style="margin-left:auto;background:var(--claret);color:#F6EDE4;border:none;border-radius:5px;padding:.25rem .8rem;cursor:pointer;font-size:.8rem">Save</button>
+        <button class="supSave" style="margin-left:auto;background:var(--claret);color:var(--on-claret);border:none;border-radius:5px;padding:.25rem .8rem;cursor:pointer;font-size:.8rem">Save</button>
       </div>
       <textarea class="supBio" rows="2" placeholder="A sentence or two about the producer&hellip;" style="margin-top:.4rem;font-size:.88rem">${esc(s.bio||"")}</textarea>
     </div>`).join("") || "<p class='dim'>No suppliers match.</p>";
@@ -2053,7 +2179,7 @@ function addSoLine(){
   const i=Date.now()+Math.random();
   $("soLines").insertAdjacentHTML("beforeend",`
   <div style="display:grid;grid-template-columns:3fr 65px 90px 100px 2fr 100px 34px;gap:.5rem;align-items:start;margin:.25rem 0" data-so="${i}">
-    <div><div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="soCap" style="font-size:.72rem;color:#9A8F84;margin-top:2px;min-height:0"></div></div>
+    <div><div class="picker"><input class="soProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="soCap" style="font-size:.72rem;color:var(--muted);margin-top:2px;min-height:0"></div></div>
     <input class="soQty" type="number" min="0" step="1" value="">
     <select class="soUnit"><option>Case</option><option>Bottle</option></select>
     <input class="soPrice" type="number" min="0" step="0.01" value="">
@@ -2136,9 +2262,9 @@ async function saveSo(){
   renderSos();
 }
 const soStatusTag = s => ({open:"<span class='tag bond'>OPEN</span>",
-  part_invoiced:"<span class='tag' style='background:#B08D2E;color:#fff'>PART INVOICED</span>",
+  part_invoiced:"<span class='tag' style='background:var(--warn);color:#fff'>PART INVOICED</span>",
   invoiced:"<span class='tag paid'>INVOICED</span>",
-  cancelled:"<span class='tag' style='background:#999;color:#fff'>CANCELLED</span>"}[s]||esc(s));
+  cancelled:"<span class='tag' style='background:var(--muted);color:var(--on-claret)'>CANCELLED</span>"}[s]||esc(s));
 async function renderSos(){
   const showDone=$("soShowDone").checked;
   let q=db.from("sales_orders").select("id,order_date,cust_order_no,status,customers(name),sales_order_lines(qty,case_price,qty_invoiced)").order("id",{ascending:false}).limit(80);
@@ -2151,7 +2277,7 @@ async function renderSos(){
     return `<tr>
     <td>SO-${o.id}</td><td class="dim">${o.order_date}</td><td>${esc(o.customers?.name||"")}</td>
     <td class="dim">${esc(o.cust_order_no||"")}</td><td class="num">${eur(net)}</td><td>${soStatusTag(o.status)}</td>
-    <td style="white-space:nowrap">${open?`<button onclick="soMakeInv(${o.id})" style="border:none;background:var(--claret);color:#F6EDE4;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Invoice</button>
+    <td style="white-space:nowrap">${open?`<button onclick="soMakeInv(${o.id})" style="border:none;background:var(--claret);color:var(--on-claret);border-radius:5px;padding:.2rem .6rem;cursor:pointer">Invoice</button>
       <button onclick="soCancel(${o.id})" style="border:1px solid var(--line);background:none;border-radius:5px;padding:.2rem .6rem;cursor:pointer">Cancel</button>`:""}</td></tr>`;
   }).join("")||"<tr><td colspan=7 class='dim'>No orders yet.</td></tr>";
 }
@@ -2287,7 +2413,7 @@ function addPoLine(){
   const i=Date.now()+Math.random();
   $("poLines").insertAdjacentHTML("beforeend",`
   <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;align-items:start;margin:.25rem 0" data-po="${i}">
-    <div><div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="poCap" style="font-size:.72rem;color:#9A8F84;margin-top:2px;min-height:0"></div></div>
+    <div><div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="poCap" style="font-size:.72rem;color:var(--muted);margin-top:2px;min-height:0"></div></div>
     <input class="poCases" type="number" min="0" step="1" value="">
     <input class="poCost" type="number" min="0" step="0.01" value="">
     <input class="poExp" type="date">
@@ -2352,8 +2478,8 @@ async function savePo(){
 function poBic(pid){ const p=products.find(x=>x.id===pid); return p?p.bottles_in_case:12; }
 function poLineOut(l){ return Math.max(0, Number(l.cases)-Number(l.bottles_received||0)/poBic(l.product_id)); }
 function poStatusTag(status){
-  const map={open:["OPEN","#7A6E63"],part_received:["PART RECEIVED","#B08D2E"],received:["RECEIVED","var(--claret)"],closed_short:["CLOSED SHORT","#A03030"],cancelled:["CANCELLED","#9A8F84"]};
-  const [label,col]=map[status]||[status,"#7A6E63"];
+  const map={open:["OPEN","var(--muted)"],part_received:["PART RECEIVED","var(--warn)"],received:["RECEIVED","var(--claret)"],closed_short:["CLOSED SHORT","var(--neg)"],cancelled:["CANCELLED","var(--muted)"]};
+  const [label,col]=map[status]||[status,"var(--muted)"];
   return `<span class="tag" style="background:${col};color:#fff">${label}</span>`;
 }
 const POQ_STATUSES=[["open","Open"],["part_received","Part received"],["received","Received"],["closed_short","Closed short"],["cancelled","Cancelled"]];
@@ -2374,7 +2500,7 @@ async function renderPos(){
 }
 function poqRenderChips(){
   $("poqChips").innerHTML = POQ_STATUSES.map(([k,label])=>
-    `<button onclick="poqToggle('${k}')" class="${window._poqActive.has(k)?'active':''}" style="border:1px solid var(--line);background:${window._poqActive.has(k)?'var(--claret)':'#fff'};color:${window._poqActive.has(k)?'#F6EDE4':'var(--ink)'};border-radius:99px;padding:.25rem .8rem;cursor:pointer;font-size:.78rem">${label}</button>`
+    `<button onclick="poqToggle('${k}')" class="${window._poqActive.has(k)?'active':''}" style="border:1px solid var(--line);background:${window._poqActive.has(k)?'var(--claret)':'#fff'};color:${window._poqActive.has(k)?'var(--on-claret)':'var(--ink)'};border-radius:99px;padding:.25rem .8rem;cursor:pointer;font-size:.78rem">${label}</button>`
   ).join("");
   $("poqSearch").oninput = poqRenderCards;
 }
@@ -2470,7 +2596,7 @@ async function poRenderDetail(){
       </div>
     </div>
     <p class="hint" style="margin:0 0 .8rem">${o.order_date}${o.reference?" \u00B7 ref "+esc(o.reference):""}${o.expected_date?" \u00B7 expected "+o.expected_date:""}</p>
-    <p style="margin:0 0 ${minimized?"0":"1rem"}"><span class="tag" style="background:${paid>=net&&net>0?'var(--claret)':paid>0?'#B08D2E':'#A03030'};color:#fff">PAID \u20AC${eur(paid)} OF \u20AC${eur(net)}</span></p>
+    <p style="margin:0 0 ${minimized?"0":"1rem"}"><span class="tag" style="background:${paid>=net&&net>0?'var(--claret)':paid>0?'var(--warn)':'var(--neg)'};color:#fff">PAID \u20AC${eur(paid)} OF \u20AC${eur(net)}</span></p>
     ${minimized?"":`
 
     <div class="grid3" style="margin-bottom:1rem">
@@ -2817,27 +2943,27 @@ function siWireLinePicker(i){
 function siRender(){
   $("siBody").innerHTML = siLines.map((l,i)=>{
     const left = `<div style="font-size:.9rem">${esc(l.description||"")}</div>
-      <div style="font-size:.78rem;color:#9A8F84;margin-top:2px">\u20ac${Number(l.caseCost||0).toFixed(2)}/case</div>`;
+      <div style="font-size:.78rem;color:var(--muted);margin-top:2px">\u20ac${Number(l.caseCost||0).toFixed(2)}/case</div>`;
     let right;
     if(!l.confirmed){
       const startName = l.candidateId ? siProdName(l.candidateId) : "";
       right = `<div class="picker"><input id="siPick${i}" value="${esc(startName)}" placeholder="type to find the wine\u2026" autocomplete="off" data-i="${i}"><ul style="display:none"></ul></div>
         <div style="display:flex;align-items:center;gap:.4rem;margin-top:6px">
-          <label style="font-size:.76rem;color:#9A8F84;text-transform:none;margin:0">Cases</label>
+          <label style="font-size:.76rem;color:var(--muted);text-transform:none;margin:0">Cases</label>
           <input value="${l.cases}" oninput="siLines[${i}].cases=+this.value||0" type="number" min="0" step="1" style="width:64px;padding:.25rem .35rem">
         </div>
-        <div style="margin-top:6px"><button onclick="siConfirmLine(${i})" style="border:1px solid var(--claret);background:var(--claret);color:#F6EDE4;border-radius:5px;padding:.25rem .7rem;cursor:pointer;font-size:.8rem">Confirm</button></div>
-        <div id="siConfirmErr${i}" style="color:#A03030;font-size:.76rem;margin-top:3px"></div>`;
+        <div style="margin-top:6px"><button onclick="siConfirmLine(${i})" style="border:1px solid var(--claret);background:var(--claret);color:var(--on-claret);border-radius:5px;padding:.25rem .7rem;cursor:pointer;font-size:.8rem">Confirm</button></div>
+        <div id="siConfirmErr${i}" style="color:var(--neg);font-size:.76rem;margin-top:3px"></div>`;
     } else if(l.status==="choose_po"){
       const cands = siOpenLines.filter(o=>o.line.product_id===l.candidateId);
       right = `<div style="font-size:.9rem">#${l.candidateId} ${esc(siProdName(l.candidateId))}</div>
-        <div style="font-size:.78rem;color:#9A8F84;margin:4px 0 6px">On more than one open PO \u2014 which is this for?</div>
+        <div style="font-size:.78rem;color:var(--muted);margin:4px 0 6px">On more than one open PO \u2014 which is this for?</div>
         <div>${cands.map(c=>`<label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;padding:.15rem 0;cursor:pointer">
           <input type="radio" name="sipo${i}" onclick="siChoosePO(${i},${c.po_id})"> PO-${c.po_id} \u2014 ${poLineOut(c.line)} outstanding${c.exp?" \u00B7 exp "+c.exp:""}</label>`).join("")}</div>`;
     } else {
       const badge = l.status==="matched"
-        ? "<span style='background:#e1f5ee;color:#0f6e56;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Confirmed \u2014 matched</span>"
-        : "<span style='background:#faeeda;color:#854f0b;border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Confirmed \u2014 qty differs"+(l.po_line?" ("+poLineOut(l.po_line.line)+" outstanding)":"")+"</span>";
+        ? "<span style='background:var(--dp-bg);color:var(--dp);border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Confirmed \u2014 matched</span>"
+        : "<span style='background:var(--warn-bg);color:var(--warn);border-radius:99px;padding:.15rem .6rem;font-size:.78rem'>Confirmed \u2014 qty differs"+(l.po_line?" ("+poLineOut(l.po_line.line)+" outstanding)":"")+"</span>";
       let syncBlock="";
       const p=products.find(x=>x.id===l.candidateId);
       if(p && Math.abs(Number(p.case_cost)-Number(l.caseCost))>0.005){
@@ -2847,7 +2973,7 @@ function siRender(){
       }
       right = `<div style="font-size:.9rem">#${l.candidateId} ${esc(siProdName(l.candidateId))} \u00B7 ${l.cases} case${l.cases===1?"":"s"}</div>
         ${badge}${syncBlock}
-        <div style="margin-top:6px"><button onclick="siChangeMatch(${i})" style="background:none;border:none;color:#9A8F84;text-decoration:underline;cursor:pointer;font-size:.76rem;padding:0">Change match</button></div>`;
+        <div style="margin-top:6px"><button onclick="siChangeMatch(${i})" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:.76rem;padding:0">Change match</button></div>`;
     }
     return `<div style="display:grid;grid-template-columns:1fr 1fr;padding:.6rem .75rem;border-top:1px solid var(--line)">
       <div>${left}</div><div style="padding-left:1rem;border-left:1px solid var(--line)">${right}</div></div>`;
