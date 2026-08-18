@@ -113,7 +113,7 @@
   button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--claret);outline-offset:2px}
   #sideNav button:focus-visible{outline-color:var(--sidebar-text)}
 
-  main{max-width:1100px;margin:0 auto;padding:1.2rem;width:100%}
+  main{max-width:1360px;margin:0 auto;padding:1.2rem;width:100%}
 
   @media(max-width:800px){
     #appShell.on{flex-direction:column}
@@ -468,15 +468,15 @@
         <div><label for="poRef">Reference <span style="text-transform:none;font-weight:400">(optional)</span></label><input id="poRef" placeholder="supplier order / proforma no."></div>
       </div>
       <div class="grid3">
-        <div><label for="poExpected">Expected delivery <span style="text-transform:none;font-weight:400">(whole order &mdash; lines can differ)</span></label><input id="poExpected" type="date"></div>
+        <div><label for="poExpected">Expected delivery <span style="text-transform:none;font-weight:400">(whole order &mdash; lines can differ)</span></label><input id="poExpected" type="date"><div id="poExpWarn" class="hint" style="color:var(--warn);display:none;margin-top:.25rem"></div></div>
         <div style="display:flex;gap:1rem;align-items:end;padding-bottom:.55rem">
           <label style="display:flex;align-items:center;gap:.4rem;margin:0;text-transform:none;font-size:.9rem;font-weight:500;color:var(--ink)"><input type="checkbox" id="poTransit" style="width:auto"> in transit</label>
         </div>
-        <div></div>
+        <div><label>Requested by</label><div id="poReqBySlot"></div></div>
       </div>
       <label>Lines <span style="text-transform:none;font-weight:400">(blank lines are ignored; note a line if it needs one &mdash; e.g. &ldquo;samples&rdquo; when there&rsquo;s no cost)</span></label>
-      <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600">
-        <div>Wine</div><div>Cases</div><div>Cost/case &euro;</div><div>Expected</div><div>Note</div><div>Total &euro;</div><div></div>
+      <div style="display:grid;grid-template-columns:3fr 130px 70px 100px 125px 2fr 95px 34px;gap:.5rem;margin:.2rem 0 0;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600">
+        <div>Wine</div><div>Cost centre</div><div>Cases</div><div>Cost/case &euro;</div><div>Expected</div><div>Note</div><div>Total &euro;</div><div></div>
       </div>
       <div id="poLines"></div>
       <button class="btn" style="background:var(--muted);margin-top:.4rem" id="poAddLine">+ add line</button>
@@ -499,7 +499,7 @@
         <button class="btn" style="margin-left:auto;background:var(--muted)" onclick="siOpen()">Upload supplier invoice</button>
         <button class="btn" onclick="rdOpen()">Receive delivery</button>
       </div>
-      <div style="display:grid;grid-template-columns:290px 1fr;gap:1.75rem;margin-top:.9rem;align-items:start">
+      <div style="display:grid;grid-template-columns:250px 1fr;gap:1.75rem;margin-top:.9rem;align-items:start">
         <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:.9rem">
           <input id="poqSearch" placeholder="Search PO number or supplier&hellip;" style="margin-bottom:.5rem">
           <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.6rem" id="poqChips"></div>
@@ -910,6 +910,7 @@ async function enter(session){
   $("whoBox").style.display="flex";
   $("whoEmail").textContent = session.user.email;
   window._uid = session.user.id;
+  window._userEmail = session.user.email;
   applyTheme(loadThemePref());
   await loadRefData();
   switchView("cockpit");
@@ -1924,6 +1925,84 @@ function showSalesSub(s){
 }
 
 /* ==================== SUPPLIERS & BIOS ==================== */
+/* ==================== COST CENTRES / STAFF ==================== */
+async function ensureCostCentres(){
+  if(window._costCentres) return;
+  window._costCentres = await fetchAll("cost_centres","id,name","name").catch(()=>[]);
+}
+async function ensureStaff(){
+  if(window._staff) return;
+  window._staff = await fetchAll("staff","id,name,email,active","name").catch(()=>[]);
+}
+function ccSelectHtml(cls, extraAttrs, selectedId){
+  const opts=(window._costCentres||[]).map(c=>`<option value="${c.id}"${String(c.id)===String(selectedId||"")?" selected":""}>${esc(c.name)}</option>`).join("");
+  return `<select class="${cls}" ${extraAttrs||""} style="font-size:.85rem;padding:.4rem .35rem"><option value="">No cost centre</option>${opts}<option value="__new">+ Add new\u2026</option></select>`;
+}
+function staffSelectHtml(cls, extraAttrs, selectedId){
+  const opts=(window._staff||[]).filter(s=>s.active!==false).map(s=>`<option value="${s.id}"${String(s.id)===String(selectedId||"")?" selected":""}>${esc(s.name)}</option>`).join("");
+  return `<select class="${cls}" ${extraAttrs||""}><option value="">\u2014 select \u2014</option>${opts}<option value="__new">+ Add new\u2026</option></select>`;
+}
+function refreshCCSelects(){
+  document.querySelectorAll(".poCCSelect").forEach(sel=>{
+    const cur=sel.dataset.prev||sel.value;
+    const lineId=sel.dataset.poline||"";
+    sel.outerHTML = ccSelectHtml("poCCSelect", lineId?`data-poline="${lineId}" onchange="poLineCCSave(this)"`:`onchange="poLineCCSave(this)"`, cur==="__new"?"":cur);
+  });
+}
+function refreshStaffSelects(){
+  document.querySelectorAll(".poStaffSelect").forEach(sel=>{
+    const cur=sel.dataset.prev||sel.value;
+    const poId=sel.dataset.poid||"";
+    sel.outerHTML = staffSelectHtml("poStaffSelect", poId?`data-poid="${poId}" onchange="poReqBySave(this,${poId})"`:`onchange="poReqBySave(this,null)"`, cur==="__new"?"":cur);
+  });
+}
+async function poLineCCSave(sel){
+  if(sel.value==="__new"){
+    const name=prompt("New cost centre name:");
+    if(!name||!name.trim()){ sel.value=sel.dataset.prev||""; return; }
+    const {data,error}=await db.from("cost_centres").insert({name:name.trim()}).select().single();
+    if(error){ alert("Couldn\u2019t add \u2014 "+error.message); sel.value=sel.dataset.prev||""; return; }
+    window._costCentres.push(data);
+    window._costCentres.sort((a,b)=>a.name.localeCompare(b.name));
+    refreshCCSelects();
+    const fresh=document.querySelector(sel.dataset.poline?`.poCCSelect[data-poline="${sel.dataset.poline}"]`:".poCCSelect:not([data-poline])");
+    sel = fresh || sel;
+    sel.value=String(data.id);
+  }
+  sel.dataset.prev=sel.value;
+  const lineId=+sel.dataset.poline||0;
+  if(!lineId) return;
+  const val = sel.value ? +sel.value : null;
+  const {error}=await db.from("purchase_order_lines").update({cost_centre_id:val}).eq("id",lineId);
+  const m=$("poDetailMsg");
+  if(m){ if(error){ m.textContent="Not saved \u2014 "+error.message; m.className="msg err"; } else { m.textContent="Saved."; m.className="msg ok"; } }
+  const o=(window._poCache||[]).find(x=>x.id===window._poSelectedId);
+  const l=o?.purchase_order_lines.find(x=>x.id===lineId);
+  if(l) l.cost_centre_id=val;
+}
+async function poReqBySave(sel, poId){
+  if(sel.value==="__new"){
+    const name=prompt("Staff name:");
+    if(!name||!name.trim()){ sel.value=sel.dataset.prev||""; return; }
+    const email=prompt("Email (optional \u2014 lets this default automatically for that person):");
+    const {data,error}=await db.from("staff").insert({name:name.trim(), email:email&&email.trim()?email.trim():null}).select().single();
+    if(error){ alert("Couldn\u2019t add \u2014 "+error.message); sel.value=sel.dataset.prev||""; return; }
+    window._staff.push(data);
+    window._staff.sort((a,b)=>a.name.localeCompare(b.name));
+    refreshStaffSelects();
+    const fresh=document.querySelector(poId?`.poStaffSelect[data-poid="${poId}"]`:".poStaffSelect:not([data-poid])");
+    sel = fresh || sel;
+    sel.value=String(data.id);
+  }
+  sel.dataset.prev=sel.value;
+  if(poId){
+    const val=sel.value?+sel.value:null;
+    await poHeaderFieldSave(poId,"requested_by_id",val);
+  }
+}
+function ccName(id){ const c=(window._costCentres||[]).find(x=>x.id===id); return c?c.name:""; }
+function staffName(id){ const s=(window._staff||[]).find(x=>x.id===id); return s?s.name:""; }
+
 async function ensureSuppliers(){
   if(window._supAll) return;
   try{ window._supAll = await fetchAll("suppliers","id,name,bio","name"); window._supNoBio=false; }
@@ -2404,19 +2483,31 @@ function wireWinePicker(inp, ul, onPick){
 let poInited=false;
 async function poInit(){
   await ensureSuppliers();
+  await ensureCostCentres();
+  await ensureStaff();
   if(poInited){ return; }
   poInited=true;
   $("poDate").value=new Date().toISOString().slice(0,10);
   wireSupplierPicker($("poSup"), $("poSup").nextElementSibling, ()=>{});
+  const mine=(window._staff||[]).find(s=>s.email && window._userEmail && s.email.toLowerCase()===window._userEmail.toLowerCase());
+  $("poReqBySlot").innerHTML = staffSelectHtml("poStaffSelect", 'id="poReqBy" onchange="poReqBySave(this,null)"', mine?mine.id:"");
+  $("poDate").onchange=poCheckDates; $("poExpected").onchange=poCheckDates;
   $("poAddLine").onclick=()=>addPoLine();
   for(let k=0;k<5;k++) addPoLine();
   $("poSave").onclick=savePo;
 }
+function poCheckDates(){
+  const w=$("poExpWarn");
+  const od=$("poDate").value, ed=$("poExpected").value;
+  if(od && ed && ed<od){ w.textContent="Expected delivery is before the order date \u2014 check this."; w.style.display="block"; }
+  else { w.style.display="none"; }
+}
 function addPoLine(){
   const i=Date.now()+Math.random();
   $("poLines").insertAdjacentHTML("beforeend",`
-  <div style="display:grid;grid-template-columns:3fr 70px 100px 125px 2fr 95px 34px;gap:.5rem;align-items:start;margin:.25rem 0" data-po="${i}">
+  <div style="display:grid;grid-template-columns:3fr 130px 70px 100px 125px 2fr 95px 34px;gap:.5rem;align-items:start;margin:.25rem 0" data-po="${i}">
     <div><div class="picker"><input class="poProd" placeholder="wine \u2014 type code or name\u2026" autocomplete="off"><ul style="display:none"></ul></div><div class="poCap" style="font-size:.72rem;color:var(--muted);margin-top:2px;min-height:0"></div></div>
+    <div>${ccSelectHtml("poCCSelect", 'onchange="poLineCCSave(this)"', "")}</div>
     <input class="poCases" type="number" min="0" step="1" value="">
     <input class="poCost" type="number" min="0" step="0.01" value="">
     <input class="poExp" type="date">
@@ -2431,10 +2522,26 @@ function addPoLine(){
     div.querySelector(".poCap").textContent = p.id+" \u00B7 "+p.bottles_in_case+"\u00D7"+p.bottle_size_ml+"ml \u00B7 catalogue cost \u20AC"+eur(p.case_cost);
     if(!+div.querySelector(".poCases").value) div.querySelector(".poCases").value=1;
     if(!+div.querySelector(".poCost").value && Number(p.case_cost)>0) div.querySelector(".poCost").value=Number(p.case_cost).toFixed(2);
-    poLineTotal(div);
+    poLineTotal(div); poCheckCost(div);
   });
   div.querySelector(".poCases").oninput=()=>poLineTotal(div);
-  div.querySelector(".poCost").oninput=()=>poLineTotal(div);
+  div.querySelector(".poCost").oninput=()=>{ poLineTotal(div); poCheckCost(div); };
+}
+function poCheckCost(div){
+  const pid=+div.querySelector(".poProd").dataset.pid||0;
+  const p=products.find(x=>x.id===pid);
+  const cost=+div.querySelector(".poCost").value||0;
+  const cap=div.querySelector(".poCap");
+  const base=cap.dataset.base||cap.textContent;
+  cap.dataset.base=base;
+  if(p && Number(p.case_cost)>0 && cost>0){
+    const ratio=cost/Number(p.case_cost);
+    if(ratio>5||ratio<0.2){
+      cap.innerHTML = esc(base)+` <span style="color:var(--warn);font-weight:600">\u26A0 catalogue cost is \u20AC${eur(p.case_cost)} \u2014 check this figure</span>`;
+      return;
+    }
+  }
+  cap.textContent=base;
 }
 function poLineTotal(div){
   const q=+div.querySelector(".poCases").value||0, c=+div.querySelector(".poCost").value||0;
@@ -2459,23 +2566,28 @@ async function savePo(){
     cost:+div.querySelector(".poCost").value||0,
     exp:div.querySelector(".poExp").value||null,
     note:div.querySelector(".poNote").value.trim()||null,
+    cc:div.querySelector(".poCCSelect")?.value||"",
   })).filter(l=>l.pid&&l.cases>0);
   if(!lines.length) return fail("Add at least one line with a wine and case quantity.");
   $("poSave").disabled=true;
+  const reqBy=$("poReqBy")?.value||"";
   const {data:po, error:e1}=await db.from("purchase_orders").insert({
     order_date:$("poDate").value, supplier_id:supId, reference:$("poRef").value.trim()||null,
     expected_date:$("poExpected").value||null,
-    in_transit:$("poTransit").checked, comment:$("poComment").value.trim()||null, status:"open"}).select().single();
-  if(e1){ $("poSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_b2.sql been run?)"); }
+    in_transit:$("poTransit").checked, comment:$("poComment").value.trim()||null, status:"open",
+    requested_by_id: reqBy && reqBy!=="__new" ? +reqBy : null,
+    created_by_email: window._userEmail||null}).select().single();
+  if(e1){ $("poSave").disabled=false; return fail("Not saved \u2014 "+e1.message+" (has bundle_c5.sql been run?)"); }
   const {error:e2}=await db.from("purchase_order_lines").insert(lines.map(l=>({
-    po_id:po.id, product_id:l.pid, description:l.desc, cases:l.cases, case_cost:l.cost, expected_date:l.exp, note:l.note})));
+    po_id:po.id, product_id:l.pid, description:l.desc, cases:l.cases, case_cost:l.cost, expected_date:l.exp, note:l.note,
+    cost_centre_id: l.cc && l.cc!=="__new" ? +l.cc : null})));
   $("poSave").disabled=false;
   if(e2) return fail("Header saved but lines failed \u2014 "+e2.message);
   m.textContent="Purchase order PO-"+po.id+" saved."; m.className="msg ok";
   $("poLines").innerHTML=""; for(let k=0;k<5;k++) addPoLine();
   $("poSup").value=""; $("poSup").dataset.sid="";
   $("poRef").value=""; $("poComment").value=""; $("poExpected").value="";
-  $("poTransit").checked=false; poTotals();
+  $("poTransit").checked=false; poTotals(); $("poExpWarn").style.display="none";
   setTimeout(()=>showStockSub("po"),900);
 }
 function poBic(pid){ const p=products.find(x=>x.id===pid); return p?p.bottles_in_case:12; }
@@ -2489,7 +2601,7 @@ const POQ_STATUSES=[["open","Open"],["part_received","Part received"],["received
 window._poqActive = new Set(["open","part_received"]);
 async function renderPos(){
   const {data,error}=await db.from("purchase_orders")
-    .select("*, suppliers(name), purchase_order_lines(id,product_id,description,cases,case_cost,bottles_received,expected_date), purchase_order_payments(id,pay_date,amount,note)")
+    .select("*, suppliers(name), purchase_order_lines(id,product_id,description,cases,case_cost,bottles_received,expected_date,cost_centre_id), purchase_order_payments(id,pay_date,amount,note)")
     .order("id",{ascending:false}).limit(200);
   if(error){ $("poCardList").innerHTML="<p class='hint' style='padding:.8rem'>Couldn\u2019t load \u2014 "+esc(error.message)+"</p>"; return; }
   window._poCache=data||[];
@@ -2550,13 +2662,15 @@ async function poRenderDetail(){
     if(locked){
       return `<tr style="color:var(--muted);font-style:italic">
         <td>${esc(l.description)}<span style="display:block;font-size:.72rem">locked \u2014 received against</span></td>
+        <td>${esc(ccName(l.cost_centre_id))||"\u2014"}</td>
         <td class="num">${l.cases}</td><td class="num">\u20AC${eur(l.case_cost)}</td><td class="num">\u20AC${eur(total)}</td>
         <td class="num">${poLineOut(l)%1?poLineOut(l).toFixed(1):poLineOut(l)} out</td></tr>`;
     }
     return `<tr>
       <td>${esc(l.description)}</td>
-      <td class="num"><input value="${l.cases}" data-poline="${l.id}" data-field="cases" onchange="poLineFieldSave(this)" style="width:60px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent"></td>
-      <td class="num"><input value="${Number(l.case_cost).toFixed(2)}" data-poline="${l.id}" data-field="case_cost" onchange="poLineFieldSave(this)" style="width:75px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent"></td>
+      <td>${ccSelectHtml("poCCSelect", `data-poline="${l.id}" onchange="poLineCCSave(this)"`, l.cost_centre_id||"")}</td>
+      <td class="num"><input value="${l.cases}" data-poline="${l.id}" data-field="cases" onchange="poLineFieldSave(this)" style="width:74px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent"></td>
+      <td class="num"><input value="${Number(l.case_cost).toFixed(2)}" data-poline="${l.id}" data-field="case_cost" data-pid="${l.product_id}" onchange="poLineCostSave(this)" style="width:110px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent"></td>
       <td class="num">\u20AC${eur(total)}</td>
       <td class="num">${poLineOut(l)%1?poLineOut(l).toFixed(1):poLineOut(l)} out</td></tr>`;
   }).join("");
@@ -2604,12 +2718,16 @@ async function poRenderDetail(){
 
     <div class="grid3" style="margin-bottom:1rem">
       <div><label>Reference</label><input id="podRef" value="${esc(o.reference||"")}" onchange="poHeaderFieldSave(${o.id},'reference',this.value)"></div>
-      <div><label>Expected delivery</label><input id="podExp" type="date" value="${o.expected_date||""}" onchange="poHeaderFieldSave(${o.id},'expected_date',this.value)"></div>
+      <div><label>Expected delivery</label><input id="podExp" type="date" value="${o.expected_date||""}" onchange="poHeaderFieldSave(${o.id},'expected_date',this.value);poCheckDetailDate(${o.id})"><div id="podExpWarn" class="hint" style="color:var(--warn);display:none;margin-top:.25rem"></div></div>
       <div><label>Comment</label><input id="podComment" value="${esc(o.comment||"")}" placeholder="optional" onchange="poHeaderFieldSave(${o.id},'comment',this.value)"></div>
+    </div>
+    <div class="grid2" style="margin-bottom:1rem">
+      <div><label>Requested by</label>${staffSelectHtml("poStaffSelect", `data-poid="${o.id}" onchange="poReqBySave(this,${o.id})"`, o.requested_by_id||"")}</div>
+      <div><label>Entered by</label><input value="${esc(o.created_by_email||"\u2014")}" disabled style="background:var(--paper)"></div>
     </div>
 
     <div class="wrap"><table>
-      <thead><tr><th>Wine</th><th class="num">Cases</th><th class="num">Cost/case</th><th class="num">Line total</th><th class="num">Outstanding</th></tr></thead>
+      <thead><tr><th>Wine</th><th>Cost centre</th><th class="num">Cases</th><th class="num">Cost/case</th><th class="num">Line total</th><th class="num">Outstanding</th></tr></thead>
       <tbody>${lineRows}</tbody>
     </table></div>
     <p style="text-align:right;font-family:'Libre Caslon Text',serif;font-size:1rem;margin:.5rem 0 0">
@@ -2635,6 +2753,7 @@ async function poRenderDetail(){
     `}
     <div class="msg" id="poDetailMsg"></div>
   `;
+  if(!minimized) poCheckDetailDate(o.id);
 }
 function poDetailToggleMin(){ window._poDetailMinimized = !window._poDetailMinimized; poRenderDetail(); }
 function poDetailClose(){ window._poSelectedId=null; window._poDetailMinimized=false; poqRenderCards(); poRenderDetail(); }
@@ -2656,6 +2775,33 @@ async function poLineFieldSave(inp){
   const l=o?.purchase_order_lines.find(x=>x.id===lineId);
   if(l) l[field]=val;
   poRenderDetail();
+}
+async function poLineCostSave(inp){
+  const lineId=+inp.dataset.poline, pid=+inp.dataset.pid;
+  const val=+inp.value||0;
+  const {error}=await db.from("purchase_order_lines").update({case_cost:val}).eq("id",lineId);
+  if(error){ const m=$("poDetailMsg"); m.textContent="Not saved \u2014 "+error.message; m.className="msg err"; return; }
+  const o=(window._poCache||[]).find(x=>x.id===window._poSelectedId);
+  const l=o?.purchase_order_lines.find(x=>x.id===lineId);
+  if(l) l.case_cost=val;
+  await poRenderDetail();
+  const m=$("poDetailMsg");
+  const p=products.find(x=>x.id===pid);
+  if(p && Number(p.case_cost)>0 && val>0){
+    const ratio=val/Number(p.case_cost);
+    if(ratio>5||ratio<0.2){
+      m.textContent=`Saved \u2014 but \u20AC${eur(val)}/case is a long way from the catalogue cost of \u20AC${eur(p.case_cost)}. Check this figure.`;
+      m.className="msg err"; return;
+    }
+  }
+  m.textContent="Saved."; m.className="msg ok";
+}
+function poCheckDetailDate(poId){
+  const o=(window._poCache||[]).find(x=>x.id===poId);
+  const w=$("podExpWarn"); if(!w) return;
+  const ed=$("podExp")?.value;
+  if(o && ed && o.order_date && ed<o.order_date){ w.textContent="Expected delivery is before the order date \u2014 check this."; w.style.display="block"; }
+  else { w.style.display="none"; }
 }
 async function poPayFieldSave(inp){
   const payId=+inp.dataset.popay, field=inp.dataset.field;
@@ -2738,8 +2884,8 @@ function printPo(id){
 }
 function exportPoCsv(id){
   const o=(window._poCache||[]).find(x=>x.id===id); if(!o) return;
-  const rows=[["Wine","Cases","Cost/case","Line total","Outstanding"]];
-  (o.purchase_order_lines||[]).forEach(l=>rows.push([l.description,l.cases,l.case_cost,(Number(l.cases)*Number(l.case_cost)).toFixed(2),poLineOut(l)]));
+  const rows=[["PO","Requested by","Entered by",""],["PO-"+id, staffName(o.requested_by_id)||"", o.created_by_email||"", ""],[],["Wine","Cost centre","Cases","Cost/case","Line total","Outstanding"]];
+  (o.purchase_order_lines||[]).forEach(l=>rows.push([l.description,ccName(l.cost_centre_id)||"",l.cases,l.case_cost,(Number(l.cases)*Number(l.case_cost)).toFixed(2),poLineOut(l)]));
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="PO-"+id+".csv"; a.click();
